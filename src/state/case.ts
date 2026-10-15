@@ -8,8 +8,8 @@ import { computeAlerts } from '../engine/alerts';
 import { rankDiseases, discriminants } from '../engine/ddx';
 import { settings } from './settings';
 import { breedByName } from '../data/breeds';
-import { tempFinding, hrFinding, rrFinding } from '../data/vitals';
-import { buildSteps, answerSigns, motifsOf, SEX_LABEL } from '../data/wizard';
+import { tempFinding, hrFinding, rrFinding, vitalsFor } from '../data/vitals';
+import { buildSteps, answerSigns, motifsOf, SEX_LABEL, NORMAL_ABSENT } from '../data/wizard';
 
 export type Draft = CaseRecord;
 
@@ -114,7 +114,10 @@ export const analysis = computed(() => {
   // FR élevée : ajoute une dyspnée (tachypnée) ; une FR normale n'efface pas une dyspnée constatée
   const measured = [tempFinding(d.species, d.temp), hrFinding(d.species, d.hr), rrFinding(d.species, d.rr)].filter((x): x is NonNullable<typeof x> => !!x);
   const findings = [...new Set([...signs, ...labFindings, ...breedFindings, ...measured])];
-  const absent = fromAnswers.absent.filter((x) => !findings.includes(x));
+  // Une valeur mesurée dans les normes écarte les anomalies correspondantes, comme la plage « Normale »
+  const normalMeasures = vitalsFor(d.species) ? ([['temp', tempFinding], ['hr', hrFinding], ['rr', rrFinding]] as const)
+    .filter(([k, f]) => d[k] != null && !f(d.species, d[k])).flatMap(([k]) => NORMAL_ABSENT[k]) : [];
+  const absent = [...new Set([...fromAnswers.absent, ...normalMeasures])].filter((x) => !findings.includes(x));
   return {
     rows,
     labFindings,

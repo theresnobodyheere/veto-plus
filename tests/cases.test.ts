@@ -106,6 +106,34 @@ describe('cas de référence', () => {
   });
 });
 
+describe('réponses normales', () => {
+  it('chienne stérilisée en PU-PD : pas de pyomètre en tête, pas de question sur les chaleurs ou le sexe', () => {
+    const a = run('chien', { motif: 'pupd', age: 'age', sex: 'fs', signs: ['abattement', 'vomissements'] });
+    expect(a.absent).toEqual(expect.arrayContaining(['male', 'femelle_entiere']));
+    expect(a.ddx.slice(0, 3).map((r) => r.disease.id)).not.toContain('pyometre');
+    freezeQuestions();
+    const asked = draft.value!.questions!.map((q) => q.id);
+    expect(asked).not.toContain('femelle_entiere');
+    expect(asked).not.toContain('male');
+    expect(asked).not.toContain('age');
+  });
+  it('normotherme, muqueuses roses : les hypothèses fébriles ou anémiques reculent', () => {
+    const base = run('chien', { motif: 'abat', age: 'adulte', signs: ['tiques', 'urines_foncees'] });
+    const s0 = base.ddx.find((r) => r.disease.id === 'babesiose_chien')!.score;
+    const after = run('chien', { motif: 'abat', age: 'adulte', temp: 'normal', muq: 'roses', signs: ['tiques', 'urines_foncees'] });
+    expect(after.absent).toEqual(expect.arrayContaining(['fievre', 'muqueuses_pales', 'ictere']));
+    expect(after.ddx.find((r) => r.disease.id === 'babesiose_chien')!.score).toBeLessThan(s0);
+  });
+  it('une température mesurée normale écarte la fièvre ; un signe coché prime', () => {
+    run('chat', { motif: 'abat' });
+    setMeasure('temp', 38.6);
+    expect(analysis.value!.absent).toContain('fievre');
+    toggleSign('hypothermie');
+    setMeasure('temp', 36);
+    expect(analysis.value!.absent).not.toContain('hypothermie');
+  });
+});
+
 describe('parcours', () => {
   it('l’analyse se débloque après le motif et 3 réponses', () => {
     newCase('chien');

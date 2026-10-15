@@ -11,6 +11,8 @@ export interface Option {
   detail?: string;
   /** Éléments ajoutés au diagnostic quand cette réponse est choisie */
   signs?: string[];
+  /** Éléments que cette réponse écarte (valeur normale, signalement) : comptés comme recherchés et absents */
+  absent?: string[];
   /** Valeur normale (cadre vert) ou anormale (pastille rouge) */
   normal?: boolean;
   abnormal?: boolean;
@@ -134,13 +136,13 @@ function ageOptions(species: SpeciesId): Option[] {
   const v = vitalsFor(species);
   const [young, adult] = AGE_NAMES[species] ?? ['Jeune', 'Adulte'];
   const youngM = v?.young ?? 6;
-  const out: Option[] = [{ id: 'jeune', label: young, detail: `moins de ${youngM} mois`, signs: ['jeune'] }];
+  const out: Option[] = [{ id: 'jeune', label: young, detail: `moins de ${youngM} mois`, signs: ['jeune'], absent: ['age'] }];
   if (v?.senior) {
-    out.push({ id: 'adulte', label: adult, detail: `${youngM} mois à ${v.senior} ans` }, { id: 'age', label: 'Âgé', detail: `${v.senior} ans et plus`, signs: ['age'] });
+    out.push({ id: 'adulte', label: adult, detail: `${youngM} mois à ${v.senior} ans`, absent: ['jeune', 'age'] }, { id: 'age', label: 'Âgé', detail: `${v.senior} ans et plus`, signs: ['age'], absent: ['jeune'] });
   } else if (family(species) === 'carn' || !v) {
-    out.push({ id: 'adulte', label: adult }, { id: 'age', label: 'Âgé', signs: ['age'] });
+    out.push({ id: 'adulte', label: adult, absent: ['jeune', 'age'] }, { id: 'age', label: 'Âgé', signs: ['age'], absent: ['jeune'] });
   } else {
-    out.push({ id: 'adulte', label: adult, detail: `${youngM} mois et plus` });
+    out.push({ id: 'adulte', label: adult, detail: `${youngM} mois et plus`, absent: ['jeune'] });
   }
   return out;
 }
@@ -148,15 +150,18 @@ function ageOptions(species: SpeciesId): Option[] {
 function sexOptions(species: SpeciesId): Option[] {
   if (family(species) === 'carn' && species !== 'macaque') {
     return [
-      { id: 'fe', label: 'Femelle entière' }, { id: 'fs', label: 'Femelle stérilisée' },
+      { id: 'fe', label: 'Femelle entière', absent: ['male'] }, { id: 'fs', label: 'Femelle stérilisée', absent: ['male', ...NOT_BREEDING] },
       { id: 'me', label: 'Mâle entier', signs: ['male'] }, { id: 'mc', label: 'Mâle castré', signs: ['male'] },
     ];
   }
-  return [{ id: 'f', label: 'Femelle' }, { id: 'm', label: species === 'cheval' ? 'Mâle (hongre ou entier)' : 'Mâle', signs: ['male'] }];
+  return [{ id: 'f', label: 'Femelle', absent: ['male'] }, { id: 'm', label: species === 'cheval' ? 'Mâle (hongre ou entier)' : 'Mâle', signs: ['male'] }];
 }
 
 /** Libellé enregistré dans le cas (PDF, historique) */
 export const SEX_LABEL: Record<string, string> = { fe: 'Femelle', fs: 'Femelle stérilisée', me: 'Mâle', mc: 'Mâle castré', f: 'Femelle', m: 'Mâle' };
+
+/** Écartés chez une femelle stérilisée ou sans événement reproducteur récent */
+const NOT_BREEDING = ['femelle_entiere', 'mise_bas_recente', 'gestation_avancee'];
 
 /** Stade reproducteur d'une femelle adulte : décisif pour pyomètre, éclampsie, fièvre de lait, cétose, toxémie de gestation… */
 function stageOptions(species: SpeciesId, sex?: string): Option[] {
@@ -164,20 +169,26 @@ function stageOptions(species: SpeciesId, sex?: string): Option[] {
   if (f === 'carn') {
     if (sex !== 'fe') return [];
     return [
-      { id: 'chaleurs', label: 'Chaleurs il y a moins de 2 mois', signs: ['femelle_entiere'] },
-      { id: 'misebas', label: 'A mis bas, allaite', detail: 'moins de 6 semaines', signs: ['mise_bas_recente'] },
-      { id: 'gestante', label: 'Gestante', signs: ['gestation_avancee'] },
-      { id: 'rien', label: 'Rien de récent', detail: 'ou ne sait pas' },
+      { id: 'chaleurs', label: 'Chaleurs il y a moins de 2 mois', signs: ['femelle_entiere'], absent: ['mise_bas_recente'] },
+      { id: 'misebas', label: 'A mis bas, allaite', detail: 'moins de 6 semaines', signs: ['mise_bas_recente'], absent: ['gestation_avancee'] },
+      { id: 'gestante', label: 'Gestante', signs: ['gestation_avancee'], absent: ['mise_bas_recente'] },
+      { id: 'rien', label: 'Rien de récent', detail: 'ni chaleurs, ni gestation, ni mise bas', absent: NOT_BREEDING },
     ];
   }
   if (sex !== 'f') return [];
-  const out: Option[] = [{ id: 'misebas', label: 'Mise bas il y a moins de 2 semaines', signs: f === 'rum' ? ['mise_bas_recente', 'debut_lactation'] : ['mise_bas_recente'] }];
-  if (f === 'rum') out.push({ id: 'lactation', label: 'Début de lactation', detail: '2 semaines à 2 mois', signs: ['debut_lactation'] });
-  out.push({ id: 'gestante', label: 'Fin de gestation', signs: ['gestation_avancee'] }, { id: 'autre', label: 'Autre stade', detail: 'tarie, vide, milieu de lactation…' });
+  const out: Option[] = [{ id: 'misebas', label: 'Mise bas il y a moins de 2 semaines', signs: f === 'rum' ? ['mise_bas_recente', 'debut_lactation'] : ['mise_bas_recente'], absent: ['gestation_avancee'] }];
+  if (f === 'rum') out.push({ id: 'lactation', label: 'Début de lactation', detail: '2 semaines à 2 mois', signs: ['debut_lactation'], absent: ['mise_bas_recente', 'gestation_avancee'] });
+  out.push({ id: 'gestante', label: 'Fin de gestation', signs: ['gestation_avancee'], absent: ['mise_bas_recente', 'debut_lactation'] },
+    { id: 'autre', label: 'Autre stade', detail: 'tarie, vide, milieu de lactation…', absent: ['mise_bas_recente', 'gestation_avancee', 'debut_lactation'] });
   return out;
 }
 
 const fr = (n: number) => String(n).replace('.', ',');
+
+/** Éléments écartés par une température, une FC ou une FR normales (plage choisie ou valeur mesurée) */
+export const NORMAL_ABSENT: Record<'temp' | 'hr' | 'rr', string[]> = {
+  temp: ['fievre', 'hypothermie'], hr: ['tachycardie', 'bradycardie'], rr: ['dyspnee'],
+};
 
 /** Plages de température, FC ou FR : basse, normale, élevée, très élevée */
 function bandOptions(kind: 'temp' | 'hr' | 'rr', species: SpeciesId): Option[] {
@@ -188,7 +199,7 @@ function bandOptions(kind: 'temp' | 'hr' | 'rr', species: SpeciesId): Option[] {
     const top = Math.round((hi + 1) * 10) / 10;
     return [
       { id: 'bas', label: 'Hypothermie', detail: `< ${fr(lo)} °C`, signs: ['hypothermie'], abnormal: true },
-      { id: 'normal', label: 'Normale', detail: `${fr(lo)} – ${fr(hi)} °C`, normal: true },
+      { id: 'normal', label: 'Normale', detail: `${fr(lo)} – ${fr(hi)} °C`, normal: true, absent: NORMAL_ABSENT.temp },
       { id: 'haut', label: 'Fièvre', detail: `${fr(hi)} – ${fr(top)} °C`, signs: ['fievre'], abnormal: true },
       { id: 'tres_haut', label: 'Forte fièvre', detail: `> ${fr(top)} °C`, signs: ['fievre'], abnormal: true },
     ];
@@ -197,21 +208,21 @@ function bandOptions(kind: 'temp' | 'hr' | 'rr', species: SpeciesId): Option[] {
     const top = Math.round(hi * 1.25);
     return [
       { id: 'bas', label: 'Bradycardie', detail: `< ${lo}/min`, signs: ['bradycardie'], abnormal: true },
-      { id: 'normal', label: 'Normale', detail: `${lo} – ${hi}/min`, normal: true },
+      { id: 'normal', label: 'Normale', detail: `${lo} – ${hi}/min`, normal: true, absent: NORMAL_ABSENT.hr },
       { id: 'haut', label: 'Tachycardie', detail: `${hi} – ${top}/min`, signs: ['tachycardie'], abnormal: true },
       { id: 'tres_haut', label: 'Tachycardie marquée', detail: `> ${top}/min`, signs: ['tachycardie'], abnormal: true },
     ];
   }
   const top = Math.round(hi * 1.5);
   return [
-    { id: 'normal', label: 'Normale', detail: `${lo} – ${hi}/min`, normal: true },
+    { id: 'normal', label: 'Normale', detail: `${lo} – ${hi}/min`, normal: true, absent: NORMAL_ABSENT.rr },
     { id: 'haut', label: 'Rapide', detail: `${hi} – ${top}/min`, signs: ['dyspnee'], abnormal: true },
     { id: 'tres_haut', label: 'Très rapide ou difficile', detail: `> ${top}/min, bouche ouverte, discordance`, signs: ['dyspnee'], abnormal: true },
   ];
 }
 
 const MUCOUS: Option[] = [
-  { id: 'roses', label: 'Roses', detail: 'TRC < 2 s', normal: true },
+  { id: 'roses', label: 'Roses', detail: 'TRC < 2 s', normal: true, absent: ['muqueuses_pales', 'ictere', 'muqueuses_congestives', 'cyanose'] },
   { id: 'pales', label: 'Pâles', detail: 'ou blanches', signs: ['muqueuses_pales'], abnormal: true },
   { id: 'jaunes', label: 'Jaunes', detail: 'ictère', signs: ['ictere'], abnormal: true },
   { id: 'congestives', label: 'Congestives', detail: 'rouges, TRC allongé', signs: ['muqueuses_congestives'], abnormal: true },
@@ -219,13 +230,13 @@ const MUCOUS: Option[] = [
 ];
 
 const HYDRATION: Option[] = [
-  { id: 'normale', label: 'Normale', detail: 'moins de 5 %', normal: true },
+  { id: 'normale', label: 'Normale', detail: 'moins de 5 %', normal: true, absent: ['deshydratation'] },
   { id: 'moderee', label: 'Déshydratation légère à modérée', detail: '5 à 8 % : pli de peau lent, muqueuses collantes', signs: ['deshydratation'], abnormal: true },
   { id: 'severe', label: 'Déshydratation sévère', detail: 'plus de 8 % : œil enfoncé, pli persistant, extrémités froides', signs: ['deshydratation'], abnormal: true },
 ];
 
 const HERD: Option[] = [
-  { id: 'seul', label: 'Un seul animal' },
+  { id: 'seul', label: 'Un seul animal', absent: ['plusieurs_animaux'] },
   { id: 'plusieurs', label: 'Plusieurs animaux malades', signs: ['plusieurs_animaux'] },
   { id: 'morts', label: 'Plusieurs malades, morts subites', signs: ['plusieurs_animaux', 'mort_subite'] },
 ];
@@ -314,7 +325,9 @@ export function answerSigns(c: WizardCase): { present: string[]; absent: string[
       else if (ans === 'non') absent.add(s.sign);
       continue;
     }
-    s.options?.find((o) => o.id === ans)?.signs?.forEach((x) => present.add(x));
+    const o = s.options?.find((x) => x.id === ans);
+    o?.signs?.forEach((x) => present.add(x));
+    o?.absent?.forEach((x) => absent.add(x));
   }
   return { present: [...present], absent: [...absent] };
 }
