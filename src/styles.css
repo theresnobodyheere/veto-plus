@@ -608,6 +608,10 @@ main.wiz > .section-foot { margin: -8px 0 0; }
 textarea.notes { min-height: 64px; background: var(--card); }
 .refine > .fine { width: 100%; }
 
+.herd-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.herd-field span { font-size: 13px; color: var(--muted); }
+.herd-field input { background: var(--card); font-size: 20px; text-align: center; }
+
 /* Examen général : une rangée par élément, réponses en pastilles */
 .exam { display: flex; flex-direction: column; gap: 6px; }
 .exam-row { background: var(--card); border-radius: 12px; padding: 10px 12px 12px; }

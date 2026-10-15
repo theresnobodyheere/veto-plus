@@ -11,12 +11,15 @@ import { SPECIES, type SpeciesId } from '../src/data/species';
 interface Input {
   motif: string | string[]; herd?: string; age?: string; sex?: string; stage?: string; temp?: string; hr?: string; muq?: string; hyd?: string;
   signs?: string[]; yes?: string[]; no?: string[]; labs?: Record<string, number>; breed?: string; weight?: number;
+  /** Autres réponses du parcours (durée, TRC, conscience, traitements…) */
+  ans?: Record<string, string>;
 }
 
 function run(species: SpeciesId, x: Input) {
   newCase(species);
   for (const m of [x.motif].flat()) toggleMotif(m);
   for (const k of ['herd', 'age', 'sex', 'stage', 'temp', 'hr', 'muq', 'hyd'] as const) if (x[k]) setAnswer(k, x[k]);
+  for (const [k, v] of Object.entries(x.ans ?? {})) setAnswer(k, v);
   for (const s of x.signs ?? []) toggleSign(s);
   for (const [analyte, value] of Object.entries(x.labs ?? {})) setLab({ analyte, value, source: 'manuel' });
   if (x.breed) patch({ breed: x.breed });
@@ -131,6 +134,48 @@ describe('réponses normales', () => {
     toggleSign('hypothermie');
     setMeasure('temp', 36);
     expect(analysis.value!.absent).not.toContain('hypothermie');
+  });
+});
+
+describe('données de l’examen et de l’anamnèse', () => {
+  it('veau de 4 jours en diarrhée : diarrhée néonatale devant la coccidiose', () => {
+    const a = run('bovin', { motif: 'dig', herd: 'seul', age: 'nn', signs: ['diarrhee'], hyd: 'moderee' });
+    const ids = a.ddx.map((r) => r.disease.id);
+    expect(ids[0]).toBe('diarrhee_neonatale');
+    expect(ids.indexOf('coccidiose')).not.toBe(0);
+  });
+  it('veau de 2 mois en diarrhée : la diarrhée néonatale recule', () => {
+    const nn = run('bovin', { motif: 'dig', age: 'nn', signs: ['diarrhee'] }).ddx.find((r) => r.disease.id === 'diarrhee_neonatale')!.score;
+    const older = run('bovin', { motif: 'dig', age: 'jeune', signs: ['diarrhee'] }).ddx.find((r) => r.disease.id === 'diarrhee_neonatale')!.score;
+    expect(older).toBeLessThan(nn);
+  });
+  it('chien en choc : pâle, TRC allongé, tachycarde, aigu → hémoabdomen et alerte', () => {
+    const a = run('chien', { motif: 'urg', age: 'age', muq: 'pales', hr: 'tres_haut', ans: { trc: 'long', duree: 'h24', consc: 'abattu' } });
+    expect(a.ddx[0].disease.id).toBe('hemoabdomen');
+    expect(a.alerts.some((x) => x.title === 'Signes de choc' && x.level === 'critique')).toBe(true);
+  });
+  it('coma : alerte critique', () => {
+    const a = run('chat', { motif: 'abat', ans: { consc: 'stupeur' } });
+    expect(a.alerts[0].title).toMatch(/conscience/);
+  });
+  it('AINS récents et méléna : ulcère proposé ; jamais sans exposition', () => {
+    const a = run('chien', { motif: 'dig', age: 'age', signs: ['vomissements', 'diarrhee_hemorragique'], ans: { ains: 'oui' } });
+    expect(a.ddx.slice(0, 3).map((r) => r.disease.id)).toContain('ulcere_ains');
+    const b = run('chien', { motif: 'dig', age: 'age', signs: ['vomissements', 'diarrhee_hemorragique'], ans: { ains: 'non' } });
+    expect(b.ddx.map((r) => r.disease.id)).not.toContain('ulcere_ains');
+  });
+  it('durée : une évolution chronique fait monter les maladies chroniques', () => {
+    const base = run('chat', { motif: 'pupd', age: 'age', signs: ['amaigrissement'] }).ddx.find((r) => r.disease.id === 'hyperthyroidie')!.score;
+    const chronic = run('chat', { motif: 'pupd', age: 'age', signs: ['amaigrissement'], ans: { duree: 'mois' } }).ddx.find((r) => r.disease.id === 'hyperthyroidie')!.score;
+    expect(chronic).toBeGreaterThan(base);
+  });
+  it('troupeau : l’étape des effectifs n’apparaît que pour un cas collectif', () => {
+    newCase('ovin');
+    toggleMotif('resp');
+    setAnswer('herd', 'seul');
+    expect(buildSteps(draft.value!).some((s) => s.id === 'herdInfo')).toBe(false);
+    setAnswer('herd', 'plusieurs');
+    expect(buildSteps(draft.value!).some((s) => s.id === 'herdInfo')).toBe(true);
   });
 });
 

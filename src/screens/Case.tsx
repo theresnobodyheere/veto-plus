@@ -45,6 +45,7 @@ export function Case() {
     s.kind === 'motifs' ? { label: `Suivant · ${nMotifs} motif${nMotifs > 1 ? 's' : ''}`, hidden: !nMotifs, onClick: next }
     : s.kind === 'signs' ? { label: d.signs.length ? `Suivant · ${d.signs.length} signe${d.signs.length > 1 ? 's' : ''}` : 'Aucun autre signe', onClick: next }
     : s.kind === 'exam' ? { label: examLabel(s, d.answers), onClick: next }
+    : s.kind === 'herd' ? { label: 'Suivant', onClick: () => { setAnswer('herdInfo', 'ok'); next(); } }
     : s.kind === 'labs' ? (last ? { label: 'Voir le résultat', onClick: () => void finish(), final: true } : { label: 'Continuer', onClick: next })
     : undefined;
 
@@ -131,6 +132,7 @@ function StepView({ s, pick, next }: { s: Step; pick: (id: string, a: string) =>
   }
 
   if (s.kind === 'exam') return <ExamStep s={s} head={head} />;
+  if (s.kind === 'herd') return <HerdStep head={head} />;
   if (s.kind === 'signs') return <SignsStep head={head} />;
   if (s.kind === 'breed') return <BreedStep head={head} next={next} />;
 
@@ -164,7 +166,35 @@ function StepView({ s, pick, next }: { s: Step; pick: (id: string, a: string) =>
 const examined = (s: Step, answers?: Record<string, string>) => (s.rows ?? []).filter((r) => answers?.[r.id]).length;
 function examLabel(s: Step, answers?: Record<string, string>) {
   const n = examined(s, answers);
-  return n ? `Suivant · ${n} élément${n > 1 ? 's' : ''} examiné${n > 1 ? 's' : ''}` : 'Non examiné';
+  const [verb, none] = s.id === 'exam' ? ['examiné', 'Non examiné'] : ['renseigné', 'Non renseigné'];
+  return n ? `Suivant · ${n} élément${n > 1 ? 's' : ''} ${verb}${n > 1 ? 's' : ''}` : none;
+}
+
+/** Cas collectif : effectif, malades, morts (facultatifs) */
+function HerdStep({ head }: { head: preact.ComponentChildren }) {
+  const d = draft.value!;
+  const h = d.herd ?? {};
+  const field = (k: 'effectif' | 'malades' | 'morts', label: string) => (
+    <label class="field herd-field">
+      <span>{label}</span>
+      <input type="text" inputMode="numeric" value={h[k] ?? ''} placeholder="—"
+        onInput={(e) => { const n = parseInt(e.currentTarget.value, 10); patch({ herd: { ...(draft.value!.herd ?? {}), [k]: Number.isFinite(n) && n >= 0 ? n : undefined } }); }} />
+    </label>
+  );
+  const rate = (n?: number) => (n != null && h.effectif ? `${Math.round((n / h.effectif) * 100)} %` : '');
+  return (
+    <>
+      {head}
+      <div class="herd-grid">
+        {field('effectif', 'Effectif du lot')}
+        {field('malades', 'Malades')}
+        {field('morts', 'Morts')}
+      </div>
+      {!!h.effectif && (h.malades != null || h.morts != null) && (
+        <Norms>{[h.malades != null && `Morbidité ${rate(h.malades)}`, h.morts != null && `mortalité ${rate(h.morts)}`].filter(Boolean).join(', ')}.</Norms>
+      )}
+    </>
+  );
 }
 
 /** Examen général : une rangée par élément ; un second toucher sur la réponse l'efface (non examiné) */
@@ -358,7 +388,7 @@ function BreedStep({ head, next }: { head: preact.ComponentChildren; next: () =>
 function Recap({ steps, current, onJump, species }: { steps: Step[]; current: number; onJump: (i: number) => void; species: string }) {
   const d = draft.value!;
   const fr = (n: number) => String(n).replace('.', ',');
-  const one = (s: Step, i: number) => {
+  const one = (s: Step, i: number, parent?: Step) => {
     const a = d.answers?.[s.id];
     let label: string | undefined;
     if (s.kind === 'measure' && a === 'exact' && d[s.measure!] != null) label = `${s.measure === 'temp' ? '' : `${s.name} `}${fr(d[s.measure!]!)}${s.measure === 'temp' ? ' °C' : '/min'}`;
@@ -367,11 +397,14 @@ function Recap({ steps, current, onJump, species }: { steps: Step[]; current: nu
     else if (s.kind === 'breed') label = d.breed;
     else if (s.kind === 'weight') label = d.weight ? `${fr(d.weight)} kg` : undefined;
     else if (s.kind === 'labs') label = d.labs.length ? `${d.labs.length} valeur${d.labs.length > 1 ? 's' : ''}` : undefined;
+    else if (s.kind === 'herd') label = d.herd?.malades != null ? `${d.herd.malades}${d.herd.effectif ? `/${d.herd.effectif}` : ''} malades` : undefined;
+    else if (s.id === 'trc') label = a ? `TRC ${answerLabel(s, a)}` : undefined;
+    else if (parent?.id === 'ttt') label = a ? `${s.name} : ${answerLabel(s, a)?.toLowerCase()}` : undefined;
     else label = answerLabel(s, a);
     return { i, label, key: s.id };
   };
   // Examen : une pastille par élément examiné
-  const items = steps.flatMap((s, i) => (s.rows ? s.rows.map((r) => one(r, i)) : [one(s, i)])).filter((x) => x.label && x.i !== current);
+  const items = steps.flatMap((s, i) => (s.rows ? s.rows.map((r) => one(r, i, s)) : [one(s, i)])).filter((x) => x.label && x.i !== current);
   return (
     <div class="recap">
       <button class="recap-chip" onClick={() => go('/')}>{species}</button>

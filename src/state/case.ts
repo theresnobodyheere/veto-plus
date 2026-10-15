@@ -63,6 +63,7 @@ export function setAnswer(stepId: string, answer: string | undefined) {
     // Le stade ne s'applique plus (jeune, mâle) : sa réponse est retirée
     delete answers.stage;
   }
+  if (stepId === 'herd' && answer === 'seul') delete answers.herdInfo;
   const opt = flatSteps(buildSteps({ ...d, ...p })).find((s) => s.id === stepId)?.options?.find((o) => o.id === answer);
   if (stepId === 'age') p.age = opt ? `${opt.label}${opt.detail ? ` (${opt.detail})` : ''}` : undefined;
   if (stepId === 'sex') p.sex = answer ? SEX_LABEL[answer] : undefined;

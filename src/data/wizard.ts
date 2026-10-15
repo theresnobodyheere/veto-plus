@@ -18,7 +18,7 @@ export interface Option {
   abnormal?: boolean;
 }
 
-export type StepKind = 'motifs' | 'choice' | 'measure' | 'exam' | 'signs' | 'question' | 'breed' | 'weight' | 'labs';
+export type StepKind = 'motifs' | 'choice' | 'measure' | 'exam' | 'herd' | 'signs' | 'question' | 'breed' | 'weight' | 'labs';
 
 export interface Step {
   id: string;
@@ -137,10 +137,24 @@ const AGE_NAMES: Partial<Record<SpeciesId, [string, string]>> = {
   caprin: ['Chevreau', 'Adulte ou chevrette'], cheval: ['Poulain', 'Adulte'], porc: ['Porcelet', 'Porc à l’engrais ou adulte'],
 };
 
+/** Âges du nouveau-né : chez les ruminants et le porc, les causes de diarrhée et de mortalité changent de semaine en semaine */
+export const NEWBORN_AGES = ['nn', 'j1'];
+/** Réponses d'âge d'un jeune (pas de stade reproducteur) */
+const YOUNG_AGES = ['jeune', ...NEWBORN_AGES];
+
 function ageOptions(species: SpeciesId): Option[] {
   const v = vitalsFor(species);
   const [young, adult] = AGE_NAMES[species] ?? ['Jeune', 'Adulte'];
   const youngM = v?.young ?? 6;
+  const f = family(species);
+  if ((f === 'rum' || f === 'porc') && v) {
+    return [
+      { id: 'nn', label: `${young} nouveau-né`, detail: 'moins d’une semaine', signs: ['jeune', 'neonatal'], absent: ['age'] },
+      { id: 'j1', label: `${young} de 1 à 4 semaines`, signs: ['jeune', 'neonatal'], absent: ['age'] },
+      { id: 'jeune', label: `${young} de 1 à ${youngM} mois`, signs: ['jeune'], absent: ['age', 'neonatal'] },
+      { id: 'adulte', label: adult, detail: `${youngM} mois et plus`, absent: ['jeune', 'neonatal'] },
+    ];
+  }
   const out: Option[] = [{ id: 'jeune', label: young, detail: `moins de ${youngM} mois`, signs: ['jeune'], absent: ['age'] }];
   if (v?.senior) {
     out.push({ id: 'adulte', label: adult, detail: `${youngM} mois à ${v.senior} ans`, absent: ['jeune', 'age'] }, { id: 'age', label: 'Âgé', detail: `${v.senior} ans et plus`, signs: ['age'], absent: ['jeune'] });
@@ -227,10 +241,10 @@ function bandOptions(kind: 'temp' | 'hr' | 'rr', species: SpeciesId): Option[] {
 }
 
 const MUCOUS: Option[] = [
-  { id: 'roses', label: 'Roses', detail: 'TRC < 2 s', normal: true, absent: ['muqueuses_pales', 'ictere', 'muqueuses_congestives', 'cyanose'] },
+  { id: 'roses', label: 'Roses', normal: true, absent: ['muqueuses_pales', 'ictere', 'muqueuses_congestives', 'cyanose'] },
   { id: 'pales', label: 'Pâles', detail: 'ou blanches', signs: ['muqueuses_pales'], abnormal: true },
   { id: 'jaunes', label: 'Jaunes', detail: 'ictère', signs: ['ictere'], abnormal: true },
-  { id: 'congestives', label: 'Congestives', detail: 'rouges, TRC allongé', signs: ['muqueuses_congestives'], abnormal: true },
+  { id: 'congestives', label: 'Congestives', detail: 'rouges, injectées', signs: ['muqueuses_congestives'], abnormal: true },
   { id: 'cyanose', label: 'Cyanosées', detail: 'bleues', signs: ['cyanose'], abnormal: true },
 ];
 
@@ -239,6 +253,46 @@ const HYDRATION: Option[] = [
   { id: 'moderee', label: 'Déshydratation légère à modérée', detail: '5 à 8 % : pli de peau lent, muqueuses collantes', signs: ['deshydratation'], abnormal: true },
   { id: 'severe', label: 'Déshydratation sévère', detail: 'plus de 8 % : œil enfoncé, pli persistant, extrémités froides', signs: ['deshydratation'], abnormal: true },
 ];
+
+const DURATION: Option[] = [
+  { id: 'h24', label: 'Moins de 24 h', signs: ['aigu'], absent: ['chronique'] },
+  { id: 'j7', label: '1 à 7 jours', signs: ['aigu'], absent: ['chronique'] },
+  { id: 'sem', label: '1 à 4 semaines', absent: ['aigu', 'chronique'] },
+  { id: 'mois', label: 'Plus d’un mois', signs: ['chronique'], absent: ['aigu'] },
+];
+
+const CRT: Option[] = [
+  { id: 'court', label: '< 2 s', normal: true, absent: ['trc_allonge'] },
+  { id: 'long', label: '> 2 s', detail: 'hypoperfusion, choc', signs: ['trc_allonge'], abnormal: true },
+];
+
+const CONSCIOUSNESS: Option[] = [
+  { id: 'vigilant', label: 'Vigilant', normal: true, absent: ['abattement', 'stupeur_coma'] },
+  { id: 'abattu', label: 'Abattu', signs: ['abattement'], absent: ['stupeur_coma'], abnormal: true },
+  { id: 'stupeur', label: 'Stupeur, coma', detail: 'réagit peu ou pas aux stimulations', signs: ['abattement', 'stupeur_coma'], abnormal: true },
+];
+
+/** Prévention et traitements récents : orientent (parasitisme, ulcère) et préviennent (antibiotique en cours) */
+function treatmentRows(species: SpeciesId): Step[] {
+  return [
+    { id: 'vacc', kind: 'choice', name: 'Vaccins', title: 'Vaccins', options: [
+      { id: 'ajour', label: 'À jour', normal: true, absent: ['non_vaccine'] },
+      { id: 'non', label: 'Pas à jour', signs: ['non_vaccine'], abnormal: true },
+    ] },
+    { id: 'vermif', kind: 'choice', name: 'Vermifuge', title: speciesById(species).group === 'canine' ? 'Vermifuge' : 'Antiparasitaires', options: [
+      { id: 'ajour', label: 'Traité récemment', normal: true, absent: ['non_vermifuge'] },
+      { id: 'non', label: 'Pas traité', signs: ['non_vermifuge'], abnormal: true },
+    ] },
+    { id: 'ains', kind: 'choice', name: 'AINS', title: 'AINS ou corticoïdes ces 15 derniers jours', options: [
+      { id: 'non', label: 'Non', normal: true, absent: ['ains_cortico'] },
+      { id: 'oui', label: 'Oui', signs: ['ains_cortico'], abnormal: true },
+    ] },
+    { id: 'antibio', kind: 'choice', name: 'Antibiotique', title: 'Antibiotique en cours', options: [
+      { id: 'non', label: 'Non', normal: true },
+      { id: 'oui', label: 'Oui', detail: 'prélèvements bactériologiques faussés', abnormal: true },
+    ] },
+  ];
+}
 
 const HERD: Option[] = [
   { id: 'seul', label: 'Un seul animal', absent: ['plusieurs_animaux'] },
@@ -285,6 +339,7 @@ function examStep(c: WizardCase): Step {
   const f = family(c.species);
   const v = vitalsFor(c.species);
   const rows: Step[] = [
+    { id: 'consc', kind: 'choice', name: 'Conscience', title: 'Conscience', options: CONSCIOUSNESS },
     { id: 'temp', kind: 'measure', measure: 'temp', unit: '°C', name: 'Température', title: 'Température rectale',
       norms: v ? `${fr(v.temp[0])} – ${fr(v.temp[1])} °C` : undefined, options: bandOptions('temp', c.species) },
     { id: 'hr', kind: 'measure', measure: 'hr', unit: '/min', name: 'FC', title: 'Fréquence cardiaque',
@@ -293,6 +348,7 @@ function examStep(c: WizardCase): Step {
       norms: v ? `${v.rr[0]} – ${v.rr[1]} /min au repos${f === 'carn' ? ' ; > 40 chez un cardiaque : œdème pulmonaire probable' : ''}` : undefined,
       options: bandOptions('rr', c.species) },
     { id: 'muq', kind: 'choice', name: 'Muqueuses', title: 'Muqueuses', options: MUCOUS },
+    { id: 'trc', kind: 'choice', name: 'TRC', title: 'Temps de recoloration capillaire', options: CRT },
     { id: 'hyd', kind: 'choice', name: 'Hydratation', title: 'Hydratation', options: HYDRATION },
   ];
   return { id: 'exam', kind: 'exam', name: 'Examen', title: 'Examen général', sub: 'Touchez ce qui a été examiné, puis Suivant.', rows };
@@ -311,19 +367,24 @@ export function buildSteps(c: WizardCase): Step[] {
   // Urgence : l'examen (tri) passe avant le signalement
   const urgent = selectedMotifs(c).some((m) => m.urgent);
   if (urgent) steps.push(examStep(c));
-  if (f !== 'carn' || sp.group === 'faune') steps.push({ id: 'herd', kind: 'choice', name: 'Effectif', title: 'Un ou plusieurs animaux ?', options: HERD });
+  if (f !== 'carn' || sp.group === 'faune') {
+    steps.push({ id: 'herd', kind: 'choice', name: 'Effectif', title: 'Un ou plusieurs animaux ?', options: HERD });
+    if (a.herd && a.herd !== 'seul') steps.push({ id: 'herdInfo', kind: 'herd', name: 'Troupeau', title: 'Combien d’animaux ?', sub: 'Facultatif : morbidité et mortalité orientent le diagnostic et la déclaration.' });
+  }
   steps.push({ id: 'age', kind: 'choice', name: 'Âge', title: 'Âge', norms: v?.senior ? `Considéré comme âgé à partir de ${v.senior} ans.` : undefined, options: ageOptions(c.species) });
   steps.push({ id: 'sex', kind: 'choice', name: 'Sexe', title: 'Sexe', options: sexOptions(c.species) });
-  const stage = a.age === 'jeune' ? [] : stageOptions(c.species, a.sex);
+  const stage = YOUNG_AGES.includes(a.age) ? [] : stageOptions(c.species, a.sex);
   if (stage.length) {
     steps.push({ id: 'stage', kind: 'choice', name: 'Stade', title: f === 'carn' ? 'Chaleurs, gestation ou mise bas ?' : 'Stade', options: stage,
       norms: f === 'carn' ? 'Pyomètre : surtout 4 à 8 semaines après les chaleurs. Éclampsie : dans les 4 semaines qui suivent la mise bas.' : undefined });
   }
+  steps.push({ id: 'duree', kind: 'choice', name: 'Durée', title: 'Depuis quand ?', sub: 'Début des premiers signes.', options: DURATION });
   if (!urgent) steps.push(examStep(c));
   steps.push({ id: 'signs', kind: 'signs', name: 'Signes', title: 'Autres signes ?', sub: 'Touchez tout ce qui s’applique, puis Suivant.' });
   for (const q of c.questions ?? []) {
     steps.push({ id: `q:${q.id}`, kind: 'question', name: 'Question ciblée', title: questionText(q.id, q.label), sign: q.id, supports: q.supports });
   }
+  steps.push({ id: 'ttt', kind: 'exam', name: 'Traitements', title: 'Prévention et traitements récents', sub: 'Touchez ce qui est connu, puis Suivant.', rows: treatmentRows(c.species) });
   if (breedsFor(c.species).length) steps.push({ id: 'breed', kind: 'breed', name: 'Race', title: 'Race', sub: 'Prédispositions, gabarit.' });
   steps.push({ id: 'weight', kind: 'weight', name: 'Poids', title: 'Poids', sub: 'Indispensable pour calculer les doses.' });
   if (!bilan) steps.push({ id: 'labs', kind: 'labs', name: 'Analyses', title: 'Des analyses ?' });

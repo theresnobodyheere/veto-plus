@@ -38,7 +38,9 @@ export const SIGNS: Sign[] = [
   { id: 'pupd', label: 'Polyuro-polydipsie', group: 'general', kw: ['boit beaucoup', 'urine beaucoup', 'pupd', 'polydipsie', 'polyurie', 'boit énormément', 'boit plus', 'boit davantage', 'soif', 'urine plus', 'urine souvent', 'pipi partout', 'pu pd', 'pd pu'] },
   { id: 'muqueuses_pales', label: 'Muqueuses pâles', group: 'general', kw: ['pâleur', 'anémie', 'muqueuses pâles', 'gencives blanches', 'gencives pâles', 'pâle', 'anémié', 'muqueuses blanches', 'muqueuses porcelaine', 'anémiée', 'anémiés', 'anémiées'] },
   { id: 'ictere', label: 'Ictère', group: 'general', kw: ['jaune', 'jaunisse', 'subictère', 'ictérique', 'muqueuses jaunes', 'yeux jaunes', 'sclères jaunes'] },
-  { id: 'muqueuses_congestives', label: 'Muqueuses congestives / TRC allongé', group: 'general', kw: ['congestion', 'trc', 'muqueuses rouges', 'muqueuses violacées', 'état de choc', 'choc septique', 'choc hypovolémique'] },
+  { id: 'muqueuses_congestives', label: 'Muqueuses congestives (rouges, injectées)', group: 'general', kw: ['congestion', 'muqueuses rouges', 'muqueuses violacées', 'muqueuses injectées', 'choc septique'] },
+  { id: 'trc_allonge', label: 'TRC allongé (> 2 s)', group: 'general', kw: ['trc', 'temps de recoloration', 'état de choc', 'choc hypovolémique', 'choc hémorragique', 'pouls filant', 'pouls faible'] },
+  { id: 'stupeur_coma', label: 'Stupeur / coma', group: 'neuro', kw: ['coma', 'comateux', 'stupeur', 'stuporeux', 'inconscient', 'ne réagit plus', 'ne répond plus', 'obnubilé'] },
   { id: 'cyanose', label: 'Cyanose', group: 'general', kw: ['bleu', 'cyanosé', 'cyanotique', 'muqueuses bleues'] },
   { id: 'hemorragies', label: 'Saignements / pétéchies', group: 'general', kw: ['hémorragie', 'saigne', 'pétéchies', 'ecchymoses', 'épistaxis', 'saignement', 'hématome', 'hématomes'] },
   { id: 'adenomegalie', label: 'Adénomégalie', group: 'general', kw: ['ganglions', 'nœuds lymphatiques', 'abcès ganglionnaire', 'gros ganglions', 'ganglions gonflés', 'lymphadénopathie', 'adénopathie'] },
@@ -143,6 +145,11 @@ export const SIGNS: Sign[] = [
   { id: 'boiterie_aigue_1', label: 'Boiterie aiguë d’un seul membre, suppression d’appui', group: 'locomoteur', kw: ['ne pose plus la patte', 'ne pose pas la patte', 'suppression d’appui', 'boiterie brutale', 'boite brutalement', 'boite d’un coup', 'patte en l’air', 'sur trois pattes', 'ne pose plus le pied', 'pied chaud', 'un seul pied'] },
 
   // Contexte
+  { id: 'aigu', label: 'Évolution aiguë (moins d’une semaine)', group: 'contexte', kw: ['depuis hier', 'depuis ce matin', 'depuis cette nuit', 'brutalement', 'd’un coup', 'soudain', 'soudainement', 'brutal'] },
+  { id: 'chronique', label: 'Évolution chronique (plus d’un mois)', group: 'contexte', kw: ['depuis des mois', 'depuis plusieurs mois', 'depuis longtemps', 'chronique', 'depuis des semaines', 'progressivement'] },
+  { id: 'neonatal', label: 'Nouveau-né (moins d’un mois)', group: 'contexte', species: ['bovin', 'ovin', 'caprin', 'porc'], kw: ['nouveau-né', 'quelques jours', 'sous la mère'] },
+  { id: 'ains_cortico', label: 'AINS ou corticoïdes récents', group: 'contexte', kw: ['anti-inflammatoire', 'anti-inflammatoires', 'ains', 'cortisone', 'corticoïde', 'corticoïdes', 'prednisolone', 'méloxicam', 'phénylbutazone', 'ibuprofène', 'aspirine', 'dexaméthasone'] },
+  { id: 'non_vermifuge', label: 'Vermifugation absente ou ancienne', group: 'contexte', kw: ['pas vermifugé', 'jamais vermifugé', 'non vermifugé', 'pas de vermifuge', 'pas traité contre les parasites'] },
   { id: 'jeune', label: 'Jeune / nouveau-né', group: 'contexte', kw: ['chiot', 'chaton', 'veau', 'agneau', 'chevreau', 'poulain', 'porcelet', 'nouveau-né', 'juvénile'] },
   { id: 'age', label: 'Animal âgé', group: 'contexte', kw: ['vieux', 'âgé', 'senior', 'gériatrique', 'vieille', 'âgée'] },
   { id: 'femelle_entiere', label: 'Femelle non stérilisée, chaleurs < 2 mois', group: 'contexte', species: ['chien', 'chat'], kw: ['chaleurs', 'pas stérilisée', 'non stérilisée', 'chienne entière', 'chatte entière', 'chaleurs récentes', 'en chaleur', 'était en chaleur'] },

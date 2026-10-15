@@ -32,6 +32,11 @@ export function computeAlerts(species: SpeciesId, rows: LabRow[], signs: string[
   const add = (level: Alert['level'], title: string, detail: string) => out.push({ level, title, detail });
   const young = signs.includes('jeune');
 
+  // Examen : conscience et perfusion
+  if (signs.includes('stupeur_coma')) add('critique', 'Altération de la conscience (stupeur, coma)', 'Libérer les voies aériennes, oxygène. Glycémie et température immédiates. Rechercher : hypoglycémie, intoxication, traumatisme crânien, encéphalose hépatique, hypocalcémie, choc.');
+  if (signs.includes('trc_allonge') && (signs.includes('tachycardie') || signs.includes('hypothermie') || signs.includes('muqueuses_pales')))
+    add('critique', 'Signes de choc', 'TRC allongé avec tachycardie, pâleur ou hypothermie : abord veineux, remplissage vasculaire, lactates, recherche d’une hémorragie (AFAST) ou d’un sepsis.');
+
   const k = g('k');
   if (k != null) {
     if (k >= 7) add('critique', `Hyperkaliémie sévère (K⁺ ${fr(k, 1)})`, 'Risque d’arrêt cardiaque : ECG, gluconate de calcium IV lent, insuline + glucose, traiter la cause (obstruction, Addison, IRA).');

@@ -57,6 +57,9 @@ export function Result() {
         {zoonoses.length > 0 && (
           <div class="alert attention"><b>Risque zoonotique</b><p>{zoonoses.map((r) => r.disease.name).join(', ')} : protections adaptées (gants, masque).</p></div>
         )}
+        {d.answers?.antibio === 'oui' && (
+          <div class="alert attention"><b>Antibiotique en cours</b><p>Bactériologie et antibiogramme peuvent être faussés : le signaler au laboratoire, prélever avant tout changement d’antibiotique.</p></div>
+        )}
         {d.species === 'macaque' && (
           <div class="alert critique"><b>Herpèsvirus B</b><p>Morsure ou griffure : laver 15 min puis appeler le 15. <a href="#/outils/faune">Protocole</a></p></div>
         )}
