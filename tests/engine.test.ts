@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { interpretLab, deriveFindings, type LabValue } from '../src/engine/interpret';
 import { computeAlerts } from '../src/engine/alerts';
 import { rankDiseases, likelihood, confidence, discriminants, strength } from '../src/engine/ddx';
-import { parseLabText } from '../src/ocr/parse';
+import { parseLabText } from '../src/engine/labText';
 import { normalizeUnit, ANALYTES } from '../src/data/analytes';
 import { DISEASES } from '../src/data/diseases';
 import { SIGNS, LAB_FINDINGS } from '../src/data/signs';
@@ -131,18 +131,6 @@ describe('unités', () => {
     expect(normalizeUnit('10⁹/L')).toBe('10^9/l');
     expect(normalizeUnit('K/uL')).toBe('k/µl');
     expect(normalizeUnit('UI/L')).toBe('u/l');
-  });
-});
-
-import { matchSigns } from '../src/engine/textSigns';
-describe('dictée → signes', () => {
-  it('reconnaît les signes dans une phrase', () => {
-    const s = matchSigns('Vache couchée depuis le vêlage, oreilles froides, ne rumine pas', 'bovin');
-    expect(s).toEqual(expect.arrayContaining(['decubitus', 'mise_bas_recente', 'arret_rumination']));
-  });
-  it('chien : vomit et boit beaucoup', () => {
-    const s = matchSigns('il vomit depuis 2 jours et boit beaucoup', 'chien');
-    expect(s).toEqual(expect.arrayContaining(['vomissements', 'pupd']));
   });
 });
 

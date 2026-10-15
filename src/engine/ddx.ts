@@ -16,22 +16,30 @@ export interface DdxResult {
 /** Éléments propres aux femelles : une maladie qui en fait un signe cardinal (poids 3) est exclue chez un mâle (cas individuel) */
 const FEMALE_ONLY = ['femelle_entiere', 'mise_bas_recente', 'gestation_avancee', 'ecoulement_vulvaire', 'retention_placentaire', 'mammite', 'mammite_induree', 'debut_lactation'];
 
-export function rankDiseases(species: SpeciesId, findings: string[], limit = 12): DdxResult[] {
+/**
+ * absent : éléments recherchés et déclarés absents (« Non » à une question ciblée).
+ * Un signe cardinal absent retire un point au score de la maladie.
+ */
+export function rankDiseases(species: SpeciesId, findings: string[], limit = 12, absent: string[] = []): DdxResult[] {
   const sp = speciesById(species);
   const families = new Set<SpeciesId>([species, ...sp.ddx]);
   const present = new Set(findings);
+  const missing = new Set(absent.filter((a) => !present.has(a)));
   const out: DdxResult[] = [];
 
   for (const d of DISEASES) {
     if (!d.species.some((s) => families.has(s))) continue;
     if (present.has('male') && !present.has('plusieurs_animaux') && FEMALE_ONLY.some((f) => d.f[f] === 3)) continue;
+    if (d.requires && !d.requires.some((r) => present.has(r))) continue;
     let raw = 0, total = 0;
     const matched: string[] = [];
     for (const [fid, w] of Object.entries(d.f)) {
       total += w;
       if (present.has(fid)) { raw += w; matched.push(fid); }
+      else if (w === 3 && missing.has(fid)) raw -= 1;
     }
     if (!matched.length) continue;
+    raw = Math.max(0, raw);
     const missingKey = !!d.key && !d.key.some((k) => present.has(k));
     let score = raw / Math.sqrt(total);
     if (missingKey) score *= 0.35;
@@ -84,10 +92,10 @@ export interface Discriminant {
  * Éléments à rechercher pour départager les hypothèses en tête :
  * signes absents des hypothèses probables, surtout leurs signes cardinaux, et anomalies biologiques à doser.
  */
-export function discriminants(species: SpeciesId, ddx: DdxResult[], findings: string[], limit = 8): { signs: Discriminant[]; labs: Discriminant[] } {
+export function discriminants(species: SpeciesId, ddx: DdxResult[], findings: string[], limit = 8, absent: string[] = []): { signs: Discriminant[]; labs: Discriminant[] } {
   const best = ddx[0]?.score ?? 0;
   const top = ddx.filter((r) => r.score >= best * 0.25).slice(0, 6);
-  const present = new Set(findings);
+  const present = new Set([...findings, ...absent]);
   const available = new Set(signsForSpecies(species).map((s) => s.id));
   const acc = new Map<string, { v: number; by: { name: string; v: number }[] }>();
 

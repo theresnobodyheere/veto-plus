@@ -1,4 +1,4 @@
-// Races courantes en France, par espèce : proposées à la saisie et reconnues dans le commentaire.
+// Races courantes en France, par espèce : proposées à la saisie.
 // « large » : chien de grande race à thorax profond (repère du signe « grand_chien », ex. dilatation-torsion de l'estomac).
 import type { SpeciesId } from './species';
 import { hasPhrase, norm } from '../engine/textSigns';
@@ -138,14 +138,4 @@ export function breedByName(species: SpeciesId, name?: string): Breed | undefine
   if (!n) return undefined;
   return breedsFor(species).find((b) => [b.name, ...(b.kw ?? [])].some((k) => norm(k) === norm(n)))
     ?? breedsFor(species).find((b) => [b.name, ...(b.kw ?? [])].some((k) => hasPhrase(n, k)));
-}
-
-/** Race citée dans le texte (l'expression la plus longue l'emporte : « setter irlandais » plutôt que « setter ») ; « croisé » est conservé */
-export function findBreed(text: string, species: SpeciesId): string | undefined {
-  const all = breedsFor(species).flatMap((b) => [b.name, ...(b.kw ?? [])].map((k) => ({ b, k })));
-  all.sort((x, y) => y.k.length - x.k.length);
-  const hit = all.find(({ k }) => hasPhrase(text, k));
-  const crossed = /\b(croise|croisee)\b/.test(norm(text).replace(/[^a-z0-9]+/g, ' '));
-  if (hit) return crossed ? `${hit.b.name} croisé` : hit.b.name;
-  return crossed && species === 'chien' ? 'Croisé' : undefined;
 }

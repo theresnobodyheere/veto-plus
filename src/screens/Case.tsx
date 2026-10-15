@@ -1,149 +1,296 @@
-import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { draft, patch, patchManual, setNotes, addPhotos, removePhoto, setPhotoKind, reading, toggleSign, setLab, removeLab, analysis, persist } from '../state/case';
+// Saisie d'un cas en questions successives : un choix fait passer à l'étape suivante,
+// l'analyse se débloque dès qu'il y a assez de réponses et l'hypothèse en tête s'affiche en direct.
+import { useEffect, useMemo, useState } from 'preact/hooks';
+import {
+  draft, step, patch, setAnswer, setMeasure, freezeQuestions, toggleSign, setReport, setLab, removeLab,
+  analysis, persist, canAnalyse, answeredCount, MIN_ANSWERS,
+} from '../state/case';
 import { speciesById } from '../data/species';
 import { ANALYTES, analyteById, toCanonical } from '../data/analytes';
 import { SIGN_GROUPS, signLabel, type SignGroup } from '../data/signs';
-import { formatValue } from '../engine/interpret';
-import { searchSigns, signsForSpecies } from '../engine/textSigns';
-import { parseNotes } from '../engine/notes';
 import { breedsFor } from '../data/breeds';
-import { tempFinding } from '../data/vitals';
-import { TopBar } from '../components/ui';
+import { buildSteps, motifById, answerLabel, type Step, type Option } from '../data/wizard';
+import { formatValue } from '../engine/interpret';
+import { likelihood } from '../engine/ddx';
+import { searchSigns, signsForSpecies } from '../engine/textSigns';
 import { Icon } from '../components/Icon';
 import { go } from '../lib/router';
-
-/** Signes proposés en premier selon l'espèce */
-const COMMON: Record<string, string[]> = {
-  canine: ['abattement', 'anorexie', 'vomissements', 'diarrhee', 'pupd', 'fievre', 'amaigrissement', 'douleur_abdo', 'dyspnee', 'toux', 'muqueuses_pales', 'ictere', 'convulsions', 'boiterie'],
-  rurale: ['fievre', 'abattement', 'anorexie', 'arret_rumination', 'chute_lait', 'diarrhee', 'decubitus', 'mise_bas_recente', 'toux', 'dyspnee', 'boiterie', 'avortement', 'plusieurs_animaux', 'amaigrissement'],
-  equine: ['douleur_abdo', 'tachycardie', 'fievre', 'abattement', 'anorexie', 'boiterie', 'pouls_digites', 'diarrhee', 'toux', 'jetage', 'ataxie', 'ictere', 'sueurs', 'myalgie'],
-  faune: ['abattement', 'anorexie', 'amaigrissement', 'diarrhee', 'boiterie', 'dyspnee', 'lesions_cutanees', 'mort_subite', 'plusieurs_animaux', 'fievre'],
-};
 
 export function Case() {
   const d = draft.value;
   if (!d) { go('/'); return null; }
+  const steps = buildSteps(d);
+  const i = Math.min(step.value, steps.length - 1);
+  const s = steps[i];
   const sp = speciesById(d.species);
-  const a = analysis.value!;
 
-  const onAnalyse = async () => {
-    await persist();
-    go('/resultat');
+  const goTo = (n: number) => { step.value = Math.max(0, n); window.scrollTo(0, 0); };
+  const finish = async () => { await persist(); go('/resultat'); };
+  const next = () => {
+    // En quittant les signes, les questions ciblées sont choisies d'après le classement du moment
+    if (s.kind === 'signs') freezeQuestions();
+    const st = buildSteps(draft.value!);
+    if (i + 1 >= st.length) void finish();
+    else goTo(i + 1);
   };
+  // Un choix est visible un court instant avant de passer à la suite
+  const pick = (stepId: string, answer: string) => { setAnswer(stepId, answer); setTimeout(next, 160); };
 
   return (
     <>
-      <TopBar title={sp.label} backTo="/" backLabel="Cas" />
-      <main>
-        {sp.note && <div class="alert reg"><p>{sp.note}</p></div>}
-        <Notes />
-        <Photos />
-        <Signalement />
-        <LabEditor />
-        <Signs />
-        <div style="height:70px" />
+      <header class="wiz-top">
+        <div class="wiz-row">
+          <button class="back" onClick={() => (i === 0 ? go('/') : goTo(i - 1))} aria-label={i === 0 ? 'Retour : choix de l’animal' : 'Étape précédente'}>
+            <Icon name="chevronLeft" />{i === 0 ? sp.label : 'Retour'}
+          </button>
+          <span class="wiz-name">{s.name} · {i + 1}/{steps.length}</span>
+          <button class="wiz-skip" onClick={next} hidden={i === 0}>Passer</button>
+        </div>
+        <div class="wiz-progress"><div style={{ width: `${Math.round(((i + 1) / steps.length) * 100)}%` }} /></div>
+        <Recap steps={steps} current={i} onJump={goTo} />
+      </header>
+      <main class="wiz">
+        {i === 0 && sp.note && <div class="alert reg"><p>{sp.note}</p></div>}
+        <StepView s={s} pick={pick} next={next} finish={finish} />
       </main>
-      <div class="sticky-action">
-        <button class="btn primary" onClick={onAnalyse}>
-          Analyser{a.findings.length ? ` · ${a.findings.length} élément${a.findings.length > 1 ? 's' : ''}` : ''}{a.alerts.some((x) => x.level === 'critique') ? ' · alerte vitale' : ''}
-        </button>
+      <AnalyseBar onAnalyse={finish} />
+    </>
+  );
+}
+
+function StepView({ s, pick, next, finish }: { s: Step; pick: (id: string, a: string) => void; next: () => void; finish: () => void }) {
+  const d = draft.value!;
+  const answer = d.answers?.[s.id];
+  const head = (
+    <>
+      {s.kind === 'question' && <div class="wiz-eyebrow">Pour départager les hypothèses</div>}
+      <h1 class="wiz-title">{s.title}</h1>
+      {s.sub && <p class="wiz-sub">{s.sub}</p>}
+      {s.norms && <Norms>{s.norms}</Norms>}
+    </>
+  );
+
+  if (s.kind === 'choice') {
+    const wide = (s.options ?? []).some((o) => (o.detail?.length ?? 0) > 28 || o.label.length > 22);
+    return (
+      <>
+        {head}
+        <div class={`opts ${wide ? 'one' : ''}`}>
+          {s.options!.map((o) => <Opt key={o.id} o={o} sel={answer === o.id} onClick={() => pick(s.id, o.id)} />)}
+        </div>
+      </>
+    );
+  }
+
+  if (s.kind === 'measure') return <MeasureStep s={s} head={head} pick={pick} next={next} />;
+
+  if (s.kind === 'question') {
+    return (
+      <>
+        {head}
+        {!!s.supports?.length && <Norms>« Oui » orienterait vers {s.supports.join(' ou ')}.</Norms>}
+        <div class="opts yn">
+          <Opt o={{ id: 'oui', label: 'Oui' }} sel={answer === 'oui'} onClick={() => pick(s.id, 'oui')} />
+          <Opt o={{ id: 'non', label: 'Non' }} sel={answer === 'non'} onClick={() => pick(s.id, 'non')} />
+          <button class="opt ghost wide" onClick={() => { setAnswer(s.id, undefined); next(); }}>Ne sais pas</button>
+        </div>
+      </>
+    );
+  }
+
+  if (s.kind === 'signs') return <SignsStep head={head} next={next} />;
+  if (s.kind === 'breed') return <BreedStep head={head} next={next} />;
+
+  if (s.kind === 'weight') {
+    return (
+      <>
+        {head}
+        <NumberEntry unit="kg" value={d.weight} placeholder="Poids" onDone={(n) => { patch({ weight: n, answers: { ...(d.answers ?? {}), weight: 'ok' } }); next(); }} />
+      </>
+    );
+  }
+
+  // Analyses : dernière étape (ou deuxième si le motif est un bilan)
+  const last = buildSteps(d).at(-1)?.id === 'labs';
+  return (
+    <>
+      {head}
+      <LabEditor />
+      {last && (
+        <>
+          <div class="section-title">Référence</div>
+          <input type="text" name="reference-animal" autoComplete="off" autoCorrect="off" value={d.ref ?? ''}
+            placeholder={speciesById(d.species).group === 'rurale' ? 'Élevage, n° animal (facultatif)' : 'Nom ou n° (facultatif)'} onInput={(e) => patch({ ref: e.currentTarget.value })} />
+          <p class="section-foot">Elle reste sur cet iPhone.</p>
+        </>
+      )}
+      <button class="btn primary block" style="margin-top:16px" onClick={last ? finish : next}>{last ? 'Voir le résultat' : 'Continuer'}</button>
+    </>
+  );
+}
+
+function Opt({ o, sel, onClick }: { o: Option; sel: boolean; onClick: () => void }) {
+  return (
+    <button class={`opt ${sel ? 'sel' : ''} ${o.normal ? 'normal' : ''} ${o.abnormal ? 'bad' : ''}`} onClick={onClick} aria-pressed={sel}>
+      <span class="opt-t">{o.label}</span>
+      {o.detail && <span class="opt-d">{o.detail}</span>}
+    </button>
+  );
+}
+
+function Norms({ children }: { children: preact.ComponentChildren }) {
+  return <div class="norms"><Icon name="info" size={18} /><div>{children}</div></div>;
+}
+
+/** Saisie d'un nombre au clavier de l'iPhone, validée par OK ou la touche Entrée */
+function NumberEntry({ unit, value, placeholder, onDone }: { unit: string; value?: number; placeholder: string; onDone: (n: number) => void }) {
+  const [text, setText] = useState(value != null ? String(value).replace('.', ',') : '');
+  useEffect(() => setText(value != null ? String(value).replace('.', ',') : ''), [value]);
+  const n = parseFloat(text.replace(',', '.'));
+  const ok = Number.isFinite(n) && n > 0;
+  return (
+    <div class="exact">
+      <input type="text" inputMode="decimal" placeholder={placeholder} value={text} enterKeyHint="done"
+        onInput={(e) => setText(e.currentTarget.value)} onKeyDown={(e) => { if (e.key === 'Enter' && ok) onDone(n); }} />
+      <span class="exact-unit">{unit}</span>
+      <button class="btn primary" disabled={!ok} onClick={() => onDone(n)}>OK</button>
+    </div>
+  );
+}
+
+function MeasureStep({ s, head, pick, next }: { s: Step; head: preact.ComponentChildren; pick: (id: string, a: string) => void; next: () => void }) {
+  const d = draft.value!;
+  const kind = s.measure!;
+  const answer = d.answers?.[s.id];
+  return (
+    <>
+      {head}
+      {!!s.options?.length && (
+        <div class="opts">
+          {s.options.map((o) => <Opt key={o.id} o={o} sel={answer === o.id} onClick={() => pick(s.id, o.id)} />)}
+        </div>
+      )}
+      <div class="wiz-eyebrow" style="margin-top:6px">Ou valeur mesurée</div>
+      <NumberEntry unit={s.unit!} value={d[kind]} placeholder={kind === 'temp' ? 'ex. 39,8' : 'ex. 120'} onDone={(n) => { setMeasure(kind, n); next(); }} />
+    </>
+  );
+}
+
+function SignsStep({ head, next }: { head: preact.ComponentChildren; next: () => void }) {
+  const d = draft.value!;
+  const [q, setQ] = useState('');
+  const all = useMemo(() => signsForSpecies(d.species), [d.species]);
+  const available = new Set(all.map((x) => x.id));
+  const motif = motifById(d.species, d.motif);
+  const preset = new Set(motif?.signs ?? []);
+  const sugg = (motif?.sugg ?? []).filter((id) => available.has(id) && !preset.has(id));
+  const found = q ? searchSigns(q, d.species) : [];
+  const chip = (id: string, label = signLabel(id)) => (
+    <button key={id} class={`chip ${d.signs.includes(id) ? 'on' : ''}`} onClick={() => toggleSign(id)} aria-pressed={d.signs.includes(id)}>{label}</button>
+  );
+  return (
+    <>
+      {head}
+      {sugg.length > 0 && <div class="chips">{sugg.map((id) => chip(id))}</div>}
+      <div class="search" style="margin-top:6px">
+        <input type="search" placeholder="Chercher un autre signe" value={q} onInput={(e) => setQ(e.currentTarget.value)} />
+      </div>
+      {q ? (
+        <div class="chips">{found.length ? found.map((x) => chip(x.id, x.label)) : <span class="muted">Aucun signe trouvé.</span>}</div>
+      ) : (
+        <div class="card" style="padding-top:0;padding-bottom:0">
+          {(Object.keys(SIGN_GROUPS) as SignGroup[]).filter((g) => g !== 'bio').map((g) => {
+            const items = all.filter((x) => x.group === g && !preset.has(x.id));
+            if (!items.length) return null;
+            const n = items.filter((x) => d.signs.includes(x.id)).length;
+            return (
+              <details class="group" key={g}>
+                <summary>{SIGN_GROUPS[g]} {n > 0 && <span class="tag ok">{n}</span>}</summary>
+                <div class="chips" style="padding-bottom:12px">{items.map((x) => chip(x.id, x.label))}</div>
+              </details>
+            );
+          })}
+        </div>
+      )}
+      <button class="btn block" style="margin-top:12px" onClick={next}>
+        {d.signs.length ? `Suivant · ${d.signs.length} signe${d.signs.length > 1 ? 's' : ''}` : 'Aucun autre signe'}
+      </button>
+    </>
+  );
+}
+
+function BreedStep({ head, next }: { head: preact.ComponentChildren; next: () => void }) {
+  const d = draft.value!;
+  const [q, setQ] = useState('');
+  const names = useMemo(() => {
+    const list = breedsFor(d.species).map((b) => b.name).sort((a, b) => a.localeCompare(b, 'fr'));
+    return d.species === 'chien' ? ['Croisé', ...list] : list;
+  }, [d.species]);
+  const n = q.trim().toLowerCase();
+  const shown = n ? names.filter((x) => x.toLowerCase().includes(n)) : names;
+  const choose = (breed: string) => { patch({ breed, answers: { ...(d.answers ?? {}), breed: 'ok' } }); setTimeout(next, 160); };
+  return (
+    <>
+      {head}
+      <div class="search"><input type="search" placeholder="Chercher une race" value={q} onInput={(e) => setQ(e.currentTarget.value)} /></div>
+      <div class="list" style="margin-top:10px">
+        {shown.map((b) => (
+          <button key={b} class="list-item" onClick={() => choose(b)} aria-pressed={d.breed === b}>
+            <span class="grow">{b}</span>{d.breed === b && <Icon name="check" size={20} />}
+          </button>
+        ))}
+        {!shown.length && <div class="list-item muted">Aucune race trouvée.</div>}
       </div>
     </>
   );
 }
 
-function Signalement() {
+/** Réponses déjà données : un toucher ramène à l'étape */
+function Recap({ steps, current, onJump }: { steps: Step[]; current: number; onJump: (i: number) => void }) {
   const d = draft.value!;
-  const sp = speciesById(d.species);
-  const herd = d.herd != null;
-  const num = (v: string) => parseFloat(v.replace(',', '.'));
-  // Liste triée pour la roue de sélection ; « Croisé » pour les chiens de race indéterminée
-  const breeds = useMemo(() => {
-    const names = breedsFor(d.species).map((b) => b.name).sort((a, b) => a.localeCompare(b, 'fr'));
-    return d.species === 'chien' ? [...names, 'Croisé'] : names;
-  }, [d.species]);
-  // Texte saisi gardé tel quel (« 38, » en cours de frappe), resynchronisé quand le commentaire remplit le champ
-  const fmt = (n?: number) => (n == null ? '' : String(n).replace('.', ','));
-  const [tempText, setTempText] = useState(fmt(d.temp));
-  useEffect(() => { if (num(tempText) !== d.temp) setTempText(fmt(d.temp)); }, [d.temp]);
-  const tf = tempFinding(d.species, d.temp);
+  const fr = (n: number) => String(n).replace('.', ',');
+  const items = steps.map((s, i) => {
+    const a = d.answers?.[s.id];
+    let label: string | undefined;
+    if (s.kind === 'measure' && a === 'exact' && d[s.measure!] != null) label = `${s.measure === 'temp' ? '' : `${s.name} `}${fr(d[s.measure!]!)}${s.measure === 'temp' ? ' °C' : '/min'}`;
+    else if (s.kind === 'signs') label = d.signs.length ? `${d.signs.length} signe${d.signs.length > 1 ? 's' : ''}` : undefined;
+    else if (s.kind === 'breed') label = d.breed;
+    else if (s.kind === 'weight') label = d.weight ? `${fr(d.weight)} kg` : undefined;
+    else if (s.kind === 'labs') label = d.labs.length ? `${d.labs.length} valeur${d.labs.length > 1 ? 's' : ''}` : undefined;
+    else label = answerLabel(s, a);
+    return { i, label };
+  }).filter((x) => x.label && x.i !== current);
+  if (!items.length) return null;
   return (
-    <section>
-      <div class="section-title">Animal</div>
-      <div class="list form">
-        <label class="form-row"><span class="form-label">Référence</span>
-          <input class="wide" type="text" name="reference-animal" autoComplete="off" autoCorrect="off" value={d.ref ?? ''} placeholder={sp.group === 'rurale' ? 'Élevage, n° animal' : 'Facultatif'} onInput={(e) => patch({ ref: e.currentTarget.value })} /></label>
-        {(breeds.length > 0 || d.breed) && (
-          <label class="form-row"><span class="form-label">Race</span>
-            <select value={d.breed ?? ''} onChange={(e) => patchManual({ breed: e.currentTarget.value || undefined })}>
-              <option value="">Non précisée</option>
-              {d.breed && !breeds.includes(d.breed) && <option>{d.breed}</option>}
-              {breeds.map((b) => <option key={b}>{b}</option>)}
-            </select></label>
-        )}
-        <label class="form-row"><span class="form-label">Poids</span>
-          <input type="text" inputMode="decimal" value={d.weight ?? ''} placeholder="—" onInput={(e) => patchManual({ weight: num(e.currentTarget.value) || undefined })} /><span class="form-unit">kg</span></label>
-        <label class="form-row"><span class="form-label">Température{tf && <span class="tag crit" style="margin-left:8px">{tf === 'fievre' ? 'fièvre' : 'hypothermie'}</span>}</span>
-          <input type="text" inputMode="decimal" value={tempText} placeholder="—"
-            onInput={(e) => { setTempText(e.currentTarget.value); const n = num(e.currentTarget.value); patchManual({ temp: Number.isFinite(n) ? n : undefined }); }} />
-          <span class="form-unit">°C</span></label>
-        <label class="form-row"><span class="form-label">Âge</span>
-          <input class="wide" type="text" value={d.age ?? ''} placeholder="ex. 8 ans, 3 sem." onInput={(e) => patchManual({ age: e.currentTarget.value })} /></label>
-        <label class="form-row"><span class="form-label">Sexe</span>
-          <select value={d.sex ?? ''} onChange={(e) => patchManual({ sex: e.currentTarget.value || undefined })}>
-            <option value="">Non précisé</option><option>Femelle</option><option>Femelle stérilisée</option><option>Mâle</option><option>Mâle castré</option>
-          </select></label>
-        {sp.group !== 'canine' && (
-          <label class="form-row"><span class="form-label">Cas collectif (troupeau, lot)</span>
-            <input type="checkbox" checked={herd} onChange={(e) => patchManual({ herd: e.currentTarget.checked ? (d.herd ?? {}) : undefined })} /></label>
-        )}
-        {herd && (['effectif', 'malades', 'morts'] as const).map((k) => (
-          <label class="form-row" key={k}><span class="form-label">{{ effectif: 'Effectif', malades: 'Malades', morts: 'Morts' }[k]}</span>
-            <input type="text" inputMode="numeric" value={d.herd?.[k] ?? ''} placeholder="—" onInput={(e) => {
-              const n = parseInt(e.currentTarget.value) || undefined;
-              const herdV = { ...(draft.value!.herd ?? {}), [k]: n };
-              const signs = draft.value!.signs;
-              patchManual({ herd: herdV });
-              patch({ signs: (herdV.malades ?? 0) > 1 && !signs.includes('plusieurs_animaux') ? [...signs, 'plusieurs_animaux'] : signs });
-            }} /></label>
-        ))}
-      </div>
-      <p class="section-foot">La référence reste sur cet iPhone.</p>
-    </section>
+    <div class="recap">
+      {items.map((x) => <button key={x.i} class="recap-chip" onClick={() => onJump(x.i)}>{x.label}</button>)}
+    </div>
   );
 }
 
-function Photos() {
+/** Barre du bas : hypothèse en tête et bouton Analyser, débloqué dès qu'il y a assez de réponses */
+function AnalyseBar({ onAnalyse }: { onAnalyse: () => void }) {
   const d = draft.value!;
-  const r = reading.value;
-  const input = useRef<HTMLInputElement>(null);
+  const a = analysis.value!;
+  const ok = canAnalyse.value;
+  const top = a.ddx[0];
+  const critical = a.alerts.some((x) => x.level === 'critique');
+  const left = Math.max(1, MIN_ANSWERS - answeredCount.value);
+  let lead;
+  if (ok && top) {
+    const lk = likelihood(top, top.score);
+    lead = <><span class="grow">En tête : <b>{top.disease.name}</b></span><span class={`lk-${lk}`}>{lk}</span></>;
+  } else if (!d.motif && !d.labs.length) lead = <span>Choisissez le motif de consultation</span>;
+  else if (answeredCount.value >= MIN_ANSWERS) lead = <span>Ajoutez au moins un signe pour analyser</span>;
+  else lead = <span>Encore {left} réponse{left > 1 ? 's' : ''} pour analyser</span>;
   return (
-    <section>
-      <div class="section-title">Photos</div>
-      <div class="card">
-        <div class="photos">
-          <button class="add-photo" onClick={() => input.current?.click()}><Icon name="camera" />Ajouter</button>
-          {d.photos.map((p, i) => (
-            <div class="photo" key={p.url}>
-              <img src={p.url} alt="" />
-              <button class="x" onClick={() => removePhoto(i)} aria-label="Supprimer la photo"><Icon name="xmark" /></button>
-              <select class="kind" value={p.kind} onChange={(e) => setPhotoKind(i, e.currentTarget.value as 'analyse' | 'clinique')} aria-label="Type de photo">
-                {p.kind === 'auto' && <option value="auto">Tri…</option>}
-                <option value="analyse">Analyses</option><option value="clinique">Clinique</option>
-              </select>
-            </div>
-          ))}
-        </div>
-        <input ref={input} type="file" accept="image/*" multiple hidden onChange={(e) => { const f = e.currentTarget.files; if (f?.length) void addPhotos(f); e.currentTarget.value = ''; }} />
-        {r.status !== 'idle' && (
-          <div class={`reading ${r.status === 'error' ? 'error' : ''}`}>
-            <div class="row">{r.status === 'running' && <span class="spinner" />}<span>{r.message}</span></div>
-            {r.status === 'running' && r.progress != null && <div class="progress"><div style={{ width: `${Math.round(r.progress * 100)}%` }} /></div>}
-          </div>
-        )}
-      </div>
-      <p class="section-foot">Comptes rendus d’analyses et photos cliniques (lésion, échographie, ECG…) : Véto+ les trie tout seul. Les valeurs sont lues sur l’iPhone, sans réseau ; les photos cliniques sont conservées avec le cas. Le type reste modifiable sous chaque photo.</p>
-    </section>
+    <div class="wiz-bar">
+      {critical && <div class="wiz-alert"><Icon name="warning" size={16} />Alerte vitale : voir le résultat</div>}
+      <div class="wiz-lead">{lead}</div>
+      <button class="btn primary block" disabled={!ok} onClick={onAnalyse}>
+        Analyser{ok ? ` · ${a.findings.length} élément${a.findings.length > 1 ? 's' : ''}` : ''}
+      </button>
+    </div>
   );
 }
 
@@ -155,6 +302,7 @@ function LabEditor() {
   const [val, setVal] = useState('');
   const [unit, setUnit] = useState('');
   const sel = analyteById(aid);
+  const fromReport = d.labs.filter((l) => l.source === 'ocr').length;
 
   const add = () => {
     const n = parseFloat(val.replace(',', '.'));
@@ -166,8 +314,17 @@ function LabEditor() {
 
   return (
     <section>
-      <div class="section-title">Résultats d’analyses {rows.length ? `(${rows.length})` : ''}</div>
-      <div class="card">
+      <Norms>Touchez le champ ci-dessous, puis <b>Analyser le texte</b> : l’iPhone lit le compte rendu avec l’appareil photo, sans réseau. Les valeurs et les intervalles imprimés sont repris tout seuls.</Norms>
+      <div class="card" style="margin-top:10px">
+        <textarea class="report" name="compte-rendu" autoComplete="off" autoCorrect="off" spellcheck={false}
+          placeholder="Touchez ici puis « Analyser le texte », ou collez le compte rendu"
+          value={d.otherResults ?? ''} onInput={(e) => setReport(e.currentTarget.value)} />
+        {!!d.otherResults?.trim() && (
+          <p class={`fine row ${fromReport ? '' : 'crit-text'}`} style="margin:8px 0 4px;gap:6px">
+            {fromReport ? <><Icon name="check" size={16} />{fromReport} valeur{fromReport > 1 ? 's' : ''} lue{fromReport > 1 ? 's' : ''} sur le compte rendu — vérifiez-les.</>
+              : 'Aucune valeur reconnue : vérifiez le texte ou saisissez les valeurs.'}
+          </p>
+        )}
         {rows.length > 0 && (
           <table class="lab">
             <tbody>
@@ -175,7 +332,7 @@ function LabEditor() {
                 <tr key={r.analyte.id} class={r.status}>
                   <td class="name">{r.analyte.short}
                     {r.input.unitGuessed && <div class="guessed">unité devinée ({r.input.rawValue} → {r.analyte.unit})</div>}
-                    {r.input.source !== 'manuel' && <span class="tag">{{ ia: 'Photo', ocr: 'Photo', texte: 'Texte' }[r.input.source]}</span>}
+                    {r.input.source !== 'manuel' && <span class="tag">{{ ia: 'Photo', ocr: 'Compte rendu', texte: 'Texte' }[r.input.source]}</span>}
                   </td>
                   <td class="val">
                     <input type="text" inputMode="decimal" value={formatValue(r.analyte, r.value)}
@@ -192,7 +349,6 @@ function LabEditor() {
             </tbody>
           </table>
         )}
-        {d.otherResults && <p class="pre muted" style="margin-top:8px"><b>Autres résultats lus :</b> {d.otherResults}</p>}
         {!adding ? (
           <button class="btn ghost" onClick={() => setAdding(true)}><Icon name="plus" size={20} />Saisir une valeur</button>
         ) : (
@@ -214,97 +370,6 @@ function LabEditor() {
           </div>
         )}
       </div>
-    </section>
-  );
-}
-
-function Signs() {
-  const d = draft.value!;
-  const sp = speciesById(d.species);
-  const [q, setQ] = useState('');
-  const all = useMemo(() => signsForSpecies(d.species), [d.species]);
-  const found = q ? searchSigns(q, d.species) : [];
-  const common = COMMON[sp.group].filter((id) => all.some((s) => s.id === id));
-  const labF = analysis.value!.labFindings;
-
-  return (
-    <section>
-      <div class="section-title">Signes cliniques et contexte</div>
-      <div class="card">
-        {d.signs.length > 0 && (
-          <div class="chips" style="margin-bottom:10px">
-            {d.signs.map((id) => <button key={id} class="chip on" onClick={() => toggleSign(id)} aria-label={`Retirer ${signLabel(id)}`}>{signLabel(id)}<Icon name="xmark" /></button>)}
-          </div>
-        )}
-        {labF.length > 0 && (
-          <div class="chips" style="margin-bottom:10px">
-            {labF.map((id) => <span key={id} class="chip lab"><Icon name="flask" />{signLabel(id)}</span>)}
-          </div>
-        )}
-        <div class="search">
-          <input type="search" placeholder="Rechercher un signe" value={q} onInput={(e) => setQ(e.currentTarget.value)} />
-        </div>
-        {q && (
-          <div class="chips" style="margin-top:8px">
-            {found.length ? found.map((s) => (
-              <button key={s.id} class={`chip ${d.signs.includes(s.id) ? 'on' : ''}`} onClick={() => { toggleSign(s.id); setQ(''); }}>{s.label}</button>
-            )) : <span class="muted">Aucun signe trouvé : ajoutez-le dans le commentaire.</span>}
-          </div>
-        )}
-        {!q && (
-          <>
-            <div class="chips" style="margin:10px 0">
-              {common.map((id) => (
-                <button key={id} class={`chip ${d.signs.includes(id) ? 'on' : ''}`} onClick={() => toggleSign(id)}>{signLabel(id)}</button>
-              ))}
-            </div>
-            {(Object.keys(SIGN_GROUPS) as SignGroup[]).filter((g) => g !== 'bio').map((g) => {
-              const items = all.filter((s) => s.group === g);
-              if (!items.length) return null;
-              const n = items.filter((s) => d.signs.includes(s.id)).length;
-              return (
-                <details class="group" key={g}>
-                  <summary>{SIGN_GROUPS[g]} {n > 0 && <span class="tag ok">{n}</span>}</summary>
-                  <div class="chips">
-                    {items.map((s) => <button key={s.id} class={`chip ${d.signs.includes(s.id) ? 'on' : ''}`} onClick={() => toggleSign(s.id)}>{s.label}</button>)}
-                  </div>
-                </details>
-              );
-            })}
-          </>
-        )}
-      </div>
-    </section>
-  );
-}
-
-function Notes() {
-  const d = draft.value!;
-  const auto = d.auto;
-  const vitals = useMemo(() => parseNotes(d.notes, d.species), [d.notes, d.species]);
-  // Ce qui a été repris du texte, pour que le vétérinaire voie ce qui a été rempli
-  const filled = auto ? [
-    auto.temp && d.temp != null && `T ${String(d.temp).replace('.', ',')} °C`,
-    vitals.hr != null && `FC ${vitals.hr}/min`,
-    auto.weight && d.weight != null && `poids ${d.weight} kg`,
-    auto.age && d.age && `âge ${d.age}`,
-    auto.breed && d.breed && d.breed.toLowerCase(),
-    auto.sex && d.sex && d.sex.toLowerCase(),
-    auto.herd && d.herd && 'effectifs',
-    auto.signs.length > 0 && `${auto.signs.length} signe${auto.signs.length > 1 ? 's' : ''}`,
-    auto.labs.length > 0 && `${auto.labs.length} valeur${auto.labs.length > 1 ? 's' : ''}`,
-  ].filter(Boolean) as string[] : [];
-  return (
-    <section>
-      <div class="section-title">Anamnèse et commentaire</div>
-      <div class="card">
-        <textarea name="anamnese" autoComplete="off" placeholder="Âge, poids, signes, contexte, résultats… (anonyme)" value={d.notes}
-          onInput={(e) => setNotes(e.currentTarget.value)} />
-        {filled.length > 0 && (
-          <p class="fine row" style="margin-top:8px;gap:6px"><Icon name="check" size={16} />Repris du texte : {filled.join(', ')}.</p>
-        )}
-      </div>
-      <p class="section-foot">Pour dicter : touchez le champ, puis le micro en bas à droite du clavier. Le texte remplit la page tout seul ; vos modifications à la main sont conservées.</p>
     </section>
   );
 }

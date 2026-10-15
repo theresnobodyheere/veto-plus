@@ -1,44 +1,31 @@
-// Cas en cours : saisie, lecture des photos et analyse locale.
+// Cas en cours : réponses du parcours, compte rendu d'analyses et analyse locale.
 import { signal, computed } from '@preact/signals';
 import type { CaseRecord } from '../db/db';
 import { saveCase } from '../db/db';
-import { speciesById, type SpeciesId } from '../data/species';
-const speciesGroup = (id: SpeciesId) => speciesById(id).group;
+import type { SpeciesId } from '../data/species';
 import { interpretLab, deriveFindings, type LabValue } from '../engine/interpret';
 import { computeAlerts } from '../engine/alerts';
-import { rankDiseases } from '../engine/ddx';
+import { rankDiseases, discriminants } from '../engine/ddx';
 import { settings } from './settings';
-import { parseLabText } from '../ocr/parse';
-import { parseNotes } from '../engine/notes';
-import { compressImage } from '../lib/image';
+import { parseLabText } from '../engine/labText';
 import { breedByName } from '../data/breeds';
-import { tempFinding } from '../data/vitals';
+import { tempFinding, hrFinding, rrFinding } from '../data/vitals';
+import { buildSteps, answerSigns, SEX_LABEL } from '../data/wizard';
 
-/** kind « auto » : photo pas encore triée (la lecture décide s'il s'agit d'analyses) */
-export interface Photo { blob: Blob; url: string; kind: 'analyse' | 'clinique' | 'auto'; read?: boolean }
-
-export interface Draft extends Omit<CaseRecord, 'photos'> {
-  photos: Photo[];
-  /** Champs remplis depuis le commentaire (ils suivent le texte tant que l'utilisateur ne les modifie pas) */
-  auto?: AutoFilled;
-  /** Signes retirés à la main : ne plus les reprendre depuis le texte */
-  dismissed?: string[];
-}
-
-export interface AutoFilled { weight?: boolean; age?: boolean; sex?: boolean; breed?: boolean; temp?: boolean; herd?: boolean; signs: string[]; labs: string[] }
+export type Draft = CaseRecord;
 
 export const draft = signal<Draft | null>(null);
+/** Étape affichée du parcours */
+export const step = signal(0);
 
 export function newCase(species: SpeciesId) {
-  draft.value = {
-    createdAt: Date.now(), updatedAt: Date.now(), species, signs: [], notes: '', labs: [], photos: [],
-  };
-  reading.value = { status: 'idle' };
+  draft.value = { createdAt: Date.now(), updatedAt: Date.now(), species, signs: [], notes: '', labs: [], answers: {} };
+  step.value = 0;
 }
 
 export function openCase(c: CaseRecord) {
-  draft.value = { ...c, photos: c.photos.map((b, i) => ({ blob: b, url: URL.createObjectURL(b), kind: c.photoKinds?.[i] ?? 'analyse', read: true })) };
-  reading.value = { status: 'idle' };
+  draft.value = { ...c, answers: c.answers ?? {} };
+  step.value = 0;
 }
 
 export function patch(p: Partial<Draft>) {
@@ -48,60 +35,48 @@ export function patch(p: Partial<Draft>) {
 export function toggleSign(id: string) {
   const d = draft.value;
   if (!d) return;
-  const auto = d.auto ?? { signs: [], labs: [] };
-  if (d.signs.includes(id)) {
-    patch({ signs: d.signs.filter((s) => s !== id), dismissed: [...new Set([...(d.dismissed ?? []), id])], auto: { ...auto, signs: auto.signs.filter((s) => s !== id) } });
-  } else {
-    patch({ signs: [...d.signs, id], dismissed: (d.dismissed ?? []).filter((s) => s !== id) });
-  }
+  patch({ signs: d.signs.includes(id) ? d.signs.filter((s) => s !== id) : [...d.signs, id] });
 }
 
-/** Saisie à la main d'un champ du signalement : il ne suit plus le commentaire */
-export function patchManual(p: Partial<Pick<Draft, 'weight' | 'age' | 'sex' | 'breed' | 'temp' | 'herd'>>) {
+/** Réponse à une étape du parcours ; met à jour les champs du signalement qui en dépendent */
+export function setAnswer(stepId: string, answer: string | undefined) {
   const d = draft.value;
   if (!d) return;
-  const auto = { ...(d.auto ?? { signs: [], labs: [] }) };
-  for (const k of Object.keys(p) as (keyof typeof p)[]) auto[k] = false;
-  patch({ ...p, auto });
+  const answers = { ...(d.answers ?? {}) };
+  if (answer == null) delete answers[stepId];
+  else answers[stepId] = answer;
+  const p: Partial<Draft> = { answers };
+  if (stepId === 'motif') { p.motif = answer; p.questions = undefined; }
+  if (stepId === 'age' || stepId === 'sex') {
+    // Le stade ne s'applique plus (jeune, mâle) : sa réponse est retirée
+    delete answers.stage;
+  }
+  const opt = buildSteps({ ...d, ...p }).find((s) => s.id === stepId)?.options?.find((o) => o.id === answer);
+  if (stepId === 'age') p.age = opt ? `${opt.label}${opt.detail ? ` (${opt.detail})` : ''}` : undefined;
+  if (stepId === 'sex') p.sex = answer ? SEX_LABEL[answer] : undefined;
+  if (stepId === 'herd') p.herd = answer && answer !== 'seul' ? (d.herd ?? {}) : undefined;
+  // Une plage choisie remplace une valeur exacte saisie avant
+  if (stepId === 'temp' || stepId === 'hr' || stepId === 'rr') p[stepId] = undefined;
+  patch(p);
 }
 
-/** Met à jour le commentaire et remplit la page avec ce qu'il contient */
-export function setNotes(notes: string) {
+/** Mesure exacte (température, FC, FR) : elle remplace la plage */
+export function setMeasure(kind: 'temp' | 'hr' | 'rr', value: number | undefined) {
   const d = draft.value;
   if (!d) return;
-  const f = parseNotes(notes, d.species);
-  const prev = d.auto ?? { signs: [], labs: [] };
-  const auto: AutoFilled = { ...prev, signs: [], labs: [] };
-  const next: Partial<Draft> = { notes };
+  const answers = { ...(d.answers ?? {}) };
+  if (value == null) delete answers[kind];
+  else answers[kind] = 'exact';
+  patch({ [kind]: value, answers });
+}
 
-  // Signalement : rempli si vide, ou s'il venait déjà du texte
-  for (const k of ['weight', 'age', 'sex', 'breed', 'temp'] as const) {
-    if (d[k] == null || d[k] === '' || prev[k]) {
-      (next as any)[k] = f[k];
-      auto[k] = f[k] != null;
-    }
-  }
-  if (speciesGroup(d.species) !== 'canine' && (!d.herd || prev.herd)) {
-    next.herd = f.herd ?? (prev.herd ? undefined : d.herd);
-    auto.herd = !!f.herd;
-  }
-
-  // Signes : ceux qui viennent du texte suivent le texte ; les signes choisis à la main restent
-  const dismissed = new Set(d.dismissed ?? []);
-  const fromText = f.signs.filter((s) => !dismissed.has(s));
-  if ((f.herd?.malades ?? 0) > 1 && !dismissed.has('plusieurs_animaux')) fromText.push('plusieurs_animaux');
-  const manual = d.signs.filter((s) => !prev.signs.includes(s));
-  next.signs = [...new Set([...manual, ...fromText])];
-  auto.signs = fromText.filter((s) => !manual.includes(s));
-
-  // Valeurs : jamais au détriment d'une valeur saisie, ou photographiée
-  const kept = d.labs.filter((l) => l.source !== 'texte');
-  const textLabs = f.labs.filter((v) => !kept.some((l) => l.analyte === v.analyte) && !dismissed.has(`lab:${v.analyte}`));
-  next.labs = [...kept, ...textLabs];
-  auto.labs = textLabs.map((l) => l.analyte);
-
-  next.auto = auto;
-  patch(next);
+/** Fige les questions ciblées d'après le classement du moment (en quittant l'étape des signes) */
+export function freezeQuestions() {
+  const d = draft.value;
+  const a = analysis.value;
+  if (!d || !a) return;
+  const { signs } = discriminants(d.species, a.ddx, a.findings, 3, a.absent);
+  patch({ questions: signs.map(({ id, label, supports }) => ({ id, label, supports: supports.slice(0, 2) })) });
 }
 
 export function setLab(v: LabValue) {
@@ -112,7 +87,7 @@ export function setLab(v: LabValue) {
 
 export function removeLab(analyte: string) {
   const d = draft.value;
-  if (d) patch({ labs: d.labs.filter((x) => x.analyte !== analyte), dismissed: [...new Set([...(d.dismissed ?? []), `lab:${analyte}`])] });
+  if (d) patch({ labs: d.labs.filter((x) => x.analyte !== analyte) });
 }
 
 // ——— Analyse locale (instantanée) ———
@@ -122,97 +97,58 @@ export const analysis = computed(() => {
   if (!d) return null;
   const rows = interpretLab(d.species, d.labs, settings.value.customRanges);
   const labFindings = deriveFindings(d.species, rows);
+  const fromAnswers = answerSigns(d);
   // La race renseigne le gabarit (chien de grande race à thorax profond)
   const breedFindings = breedByName(d.species, d.breed)?.large ? ['grand_chien'] : [];
-  // Température mesurée : elle prime sur « fièvre » / « hypothermie » cochés ou dictés
-  const signs = d.temp != null ? d.signs.filter((s) => s !== 'fievre' && s !== 'hypothermie') : d.signs;
-  const t = tempFinding(d.species, d.temp);
-  const findings = [...new Set([...signs, ...labFindings, ...breedFindings, ...(t ? [t] : [])])];
+  // Température et FC mesurées : elles priment sur « fièvre », « tachycardie »… cochés
+  const overridden = new Set([...(d.temp != null ? ['fievre', 'hypothermie'] : []), ...(d.hr != null ? ['tachycardie', 'bradycardie'] : [])]);
+  const signs = [...d.signs, ...fromAnswers.present].filter((s) => !overridden.has(s));
+  // FR élevée : ajoute une dyspnée (tachypnée) ; une FR normale n'efface pas une dyspnée constatée
+  const measured = [tempFinding(d.species, d.temp), hrFinding(d.species, d.hr), rrFinding(d.species, d.rr)].filter((x): x is NonNullable<typeof x> => !!x);
+  const findings = [...new Set([...signs, ...labFindings, ...breedFindings, ...measured])];
+  const absent = fromAnswers.absent.filter((x) => !findings.includes(x));
   return {
     rows,
     labFindings,
     findings,
-    ddx: rankDiseases(d.species, findings),
-    alerts: computeAlerts(d.species, rows, d.signs),
+    absent,
+    ddx: rankDiseases(d.species, findings, 12, absent),
+    alerts: computeAlerts(d.species, rows, findings),
   };
 });
 
-// ——— Lecture des photos ———
-
-export const reading = signal<{ status: 'idle' | 'running' | 'done' | 'error'; message?: string; progress?: number }>({ status: 'idle' });
-
-export async function addPhotos(files: FileList | File[], kind: Photo['kind'] = 'auto') {
+/** Réponses données après le motif (une valeur normale compte : c'est une information) */
+export const answeredCount = computed(() => {
   const d = draft.value;
-  if (!d) return;
-  const added: Photo[] = [];
-  for (const f of Array.from(files)) {
-    const blob = await compressImage(f);
-    added.push({ blob, url: URL.createObjectURL(blob), kind });
-  }
-  patch({ photos: [...draft.value!.photos, ...added] });
-  if (kind !== 'clinique') await readPhotos();
-}
+  if (!d) return 0;
+  return Object.keys(d.answers ?? {}).filter((k) => k !== 'motif').length + (d.signs.length ? 1 : 0) + (d.labs.length ? 1 : 0);
+});
 
-export function setPhotoKind(i: number, kind: Photo['kind']) {
+/** Assez d'éléments pour un classement utile */
+export const MIN_ANSWERS = 3;
+export const canAnalyse = computed(() => {
   const d = draft.value;
-  if (!d) return;
-  const photos = d.photos.map((p, j) => (j === i ? { ...p, kind, read: kind === 'clinique' ? p.read : false } : p));
-  patch({ photos });
-  if (kind === 'analyse') void readPhotos();
-}
+  const a = analysis.value;
+  return !!d && !!a && (!!d.motif || d.labs.length > 0) && answeredCount.value >= MIN_ANSWERS && a.findings.length >= 2;
+});
 
-export function removePhoto(i: number) {
-  const d = draft.value;
-  if (!d) return;
-  URL.revokeObjectURL(d.photos[i].url);
-  patch({ photos: d.photos.filter((_, j) => j !== i) });
-}
+// ——— Compte rendu d'analyses (scanné avec « Analyser le texte » d'iOS, ou collé) ———
 
 /** Fusionne des valeurs lues sans écraser les saisies manuelles */
 function mergeLabs(values: LabValue[]) {
   const d = draft.value!;
   const manual = new Set(d.labs.filter((l) => l.source === 'manuel').map((l) => l.analyte));
-  const keep = d.labs.filter((l) => manual.has(l.analyte) || !values.some((v) => v.analyte === l.analyte));
+  // Les valeurs d'une lecture précédente du compte rendu sont remplacées par la nouvelle lecture
+  const keep = d.labs.filter((l) => manual.has(l.analyte) || (l.source !== 'ocr' && !values.some((v) => v.analyte === l.analyte)));
   patch({ labs: [...keep, ...values.filter((v) => !manual.has(v.analyte))] });
 }
 
-export async function readPhotos() {
+/** Met à jour le texte du compte rendu et en reprend les valeurs */
+export function setReport(text: string) {
   const d = draft.value;
   if (!d) return;
-  const todo = d.photos.map((p, i) => ({ p, i })).filter(({ p }) => p.kind !== 'clinique' && !p.read).slice(0, 6);
-  if (!todo.length) return;
-  reading.value = { status: 'running', message: 'Lecture des photos…' };
-  const kinds = new Map<number, Photo['kind']>();
-  try {
-    const { ocrImage } = await import('../ocr/tesseract');
-    const values: LabValue[] = [];
-    for (const [k, { p, i }] of todo.entries()) {
-      const text = await ocrImage(p.blob, (pr) => {
-        reading.value = { status: 'running', message: `Lecture ${k + 1}/${todo.length}…`, progress: pr };
-      });
-      const found = parseLabText(text, d.species);
-      values.push(...found);
-      // Sans valeur reconnue, une photo non triée est considérée comme clinique
-      kinds.set(i, found.length || p.kind === 'analyse' ? 'analyse' : 'clinique');
-    }
-    mergeLabs(values);
-    reading.value = values.length || [...kinds.values()].includes('clinique')
-      ? { status: 'done', message: readingSummary(values.length, kinds) }
-      : { status: 'error', message: 'Aucune valeur reconnue. Photo plus nette, bien à plat, ou saisie manuelle.' };
-  } catch (e) {
-    reading.value = { status: 'error', message: `Lecture impossible : ${(e as Error).message}` };
-  }
-  const photos = draft.value!.photos.map((p, i) => (kinds.has(i) ? { ...p, kind: kinds.get(i)!, read: true } : p));
-  patch({ photos });
-}
-
-function readingSummary(values: number, kinds: Map<number, Photo['kind']>): string {
-  const clin = [...kinds.values()].filter((k) => k === 'clinique').length;
-  const parts = [
-    values ? `${values} valeur${values > 1 ? 's' : ''} lue${values > 1 ? 's' : ''} — vérifiez-les` : '',
-    clin ? `${clin} photo${clin > 1 ? 's' : ''} clinique${clin > 1 ? 's' : ''}, conservée${clin > 1 ? 's' : ''} avec le cas` : '',
-  ].filter(Boolean);
-  return `${parts.join(' · ')}.`;
+  patch({ otherResults: text });
+  mergeLabs(parseLabText(text, d.species).map(({ line: _l, alias: _a, ...v }) => v));
 }
 
 // ——— Enregistrement ———
@@ -221,12 +157,8 @@ export async function persist() {
   const d = draft.value;
   const a = analysis.value;
   if (!d || !a) return;
-  const { photos, auto: _auto, dismissed: _dismissed, ...rest } = d;
   const record: CaseRecord = {
-    ...rest,
-    photos: photos.map((p) => p.blob),
-    // Une photo encore « à trier » à l'enregistrement est gardée comme clinique
-    photoKinds: photos.map((p) => (p.kind === 'analyse' ? 'analyse' : 'clinique')),
+    ...d,
     summary: { top: a.ddx[0]?.disease.name, alerts: a.alerts.length, critical: a.alerts.filter((x) => x.level === 'critique').length },
   };
   const id = await saveCase(record);

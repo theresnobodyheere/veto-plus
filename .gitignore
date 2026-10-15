@@ -1,5 +1,4 @@
 node_modules
 dist
-public/tesseract
 .DS_Store
 *.local

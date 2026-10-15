@@ -17,15 +17,24 @@ export interface CaseRecord {
   breed?: string;
   /** Température rectale (°C) */
   temp?: number;
+  /** Fréquences cardiaque et respiratoire (/min) */
+  hr?: number;
+  rr?: number;
   weight?: number;
   herd?: Herd;
+  /** Signes cochés (étape des signes, « Pour affiner ») */
   signs: string[];
+  /** Parcours : motif, réponses par étape, questions ciblées figées */
+  motif?: string;
+  answers?: Record<string, string>;
+  questions?: { id: string; label: string; supports: string[] }[];
+  /** Commentaire libre des cas enregistrés par les versions précédentes */
   notes: string;
   labs: LabValue[];
-  /** Autres résultats lus sur les photos (bandelette, tests rapides…) */
+  /** Texte du compte rendu d'analyses (scanné avec l'iPhone ou collé) */
   otherResults?: string;
-  photos: Blob[];
-  /** Type de chaque photo (même ordre que photos) ; absent dans les cas enregistrés avant cette version */
+  /** Photos des cas enregistrés par les versions précédentes (conservées à l'export) */
+  photos?: Blob[];
   photoKinds?: ('analyse' | 'clinique')[];
   summary?: { top?: string; alerts: number; critical: number };
 }
@@ -54,7 +63,7 @@ export async function exportAll(): Promise<Blob> {
   const cases = await db.cases.toArray();
   const out = await Promise.all(cases.map(async (c) => ({
     ...c,
-    photos: await Promise.all(c.photos.map(blobToDataUrl)),
+    photos: await Promise.all((c.photos ?? []).map(blobToDataUrl)),
   })));
   return new Blob([JSON.stringify({ app: 'veto-plus', version: 1, exportedAt: new Date().toISOString(), cases: out })], { type: 'application/json' });
 }

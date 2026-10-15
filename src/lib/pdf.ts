@@ -8,6 +8,8 @@ import { formatValue } from '../engine/interpret';
 import { likelihood, confidence } from '../engine/ddx';
 import { settings } from '../state/settings';
 import { departementByCode } from '../data/departements';
+import { motifById } from '../data/wizard';
+import { treatmentFor, lineDose } from '../data/treatments';
 
 type RGB = [number, number, number];
 const C = {
@@ -70,6 +72,7 @@ export async function buildPdf(): Promise<Blob> {
     ['Espèce', sp.label], ['Référence', d.ref ?? ''], ['Race', d.breed ?? ''], ['Âge', d.age ?? ''], ['Sexe', d.sex ?? ''],
     ['Poids', d.weight ? `${d.weight.toLocaleString('fr-FR')} kg` : ''],
     ['Température', d.temp != null ? `${d.temp.toLocaleString('fr-FR')} °C` : ''],
+    ['FC', d.hr != null ? `${d.hr} /min` : ''], ['FR', d.rr != null ? `${d.rr} /min` : ''],
     ['Cas collectif', d.herd && (d.herd.effectif || d.herd.malades || d.herd.morts) ? `effectif ${d.herd.effectif ?? '?'} · malades ${d.herd.malades ?? '?'} · morts ${d.herd.morts ?? '?'}` : ''],
     ['Département', dept ? `${dept.nom} (${dept.code})` : ''],
   ].filter((r): r is [string, string] => !!r[1]);
@@ -105,10 +108,14 @@ export async function buildPdf(): Promise<Blob> {
     }
   }
 
-  // ——— Clinique ———
-  if (d.signs.length || d.notes.trim()) {
-    section('Signes cliniques et commentaire');
-    if (d.signs.length) para(d.signs.map(signLabel).join(' · '), 10);
+  // ——— Clinique : motif, signes cochés et réponses du parcours ———
+  const motif = motifById(d.species, d.motif)?.label;
+  const clinical = a.findings.filter((f) => !a.labFindings.includes(f));
+  if (motif || clinical.length || d.notes.trim()) {
+    section('Motif et signes cliniques');
+    if (motif) para(`Motif : ${motif}`, 10, 'bold');
+    if (clinical.length) para(clinical.map(signLabel).join(' · '), 10);
+    if (a.absent.length) para(`Absents : ${a.absent.map(signLabel).join(' · ')}`, 9, 'normal', C.muted);
     if (d.notes.trim()) { y += 1.5; para(d.notes.trim(), 9.5, 'normal', C.muted); }
   }
 
@@ -134,7 +141,6 @@ export async function buildPdf(): Promise<Blob> {
     font(8, 'normal', C.muted);
     const sources = [...new Set(a.rows.map((r) => r.rangeSource).filter(Boolean))];
     para(`H = au-dessus, B = au-dessous de l’intervalle de référence.${sources.length ? ` Références : ${sources.join(' ; ')}.` : ''}`, 8, 'normal', C.muted);
-    if (d.otherResults?.trim()) { y += 1; para(`Autres résultats : ${d.otherResults.trim()}`, 9); }
   }
 
   // ——— Diagnostic différentiel ———
@@ -155,6 +161,22 @@ export async function buildPdf(): Promise<Blob> {
       para(`Examens à envisager : ${r.disease.tests.join(' ; ')}`, 9, 'normal', C.muted, M + 7);
       if (r.disease.regulated) para(`Réglementation : ${r.disease.regulated}`, 9, 'normal', C.info, M + 7);
     });
+
+    // Conduite à tenir pour l'hypothèse en tête, si un protocole existe
+    const top = a.ddx[0];
+    const tx = treatmentFor(top.disease.id, d.species);
+    if (tx) {
+      section(`Conduite à tenir : ${top.disease.name}`);
+      if (tx.note) para(tx.note, 9.5, 'normal', C.warn);
+      for (const l of tx.lines) {
+        ensure(10);
+        const dose = lineDose(l, d.weight);
+        para(`${l.phase} — ${l.what}${dose ? ` : ${dose}` : ''}`, 10, 'bold');
+        para(l.how, 9, 'normal', C.muted);
+        y += 1;
+      }
+      para(`${d.weight ? `Quantités calculées pour ${String(d.weight).replace('.', ',')} kg. ` : ''}Vérifier chaque posologie dans le RCP${sp.food ? ' ainsi que les temps d’attente' : ''}.`, 8.5, 'normal', C.muted);
+    }
   }
 
   // ——— Pied de page sur chaque page ———

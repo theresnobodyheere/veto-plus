@@ -32,25 +32,11 @@ export default defineConfig({
       },
       workbox: {
         // Tout est mis en cache à l'installation : l'appli fonctionne entièrement hors ligne
-        globPatterns: [
-          '**/*.{js,css,html,png,svg,woff2}',
-          'data/*.json',
-          'tesseract/worker.min.js',
-          'tesseract/core/tesseract-core-simd-lstm.wasm.js',
-          'tesseract/core/tesseract-core-lstm.wasm.js',
-          'tesseract/lang/*.gz',
-        ],
+        globPatterns: ['**/*.{js,css,html,png,svg,woff2}', 'data/*.json'],
         maximumFileSizeToCacheInBytes: 12 * 1024 * 1024,
         navigateFallback: 'index.html',
         // Contrôle la page dès la première visite (hors ligne disponible immédiatement)
         clientsClaim: true,
-        runtimeCaching: [
-          {
-            urlPattern: ({ url }) => url.pathname.includes('/tesseract/'),
-            handler: 'CacheFirst',
-            options: { cacheName: 'tesseract-extra' },
-          },
-        ],
       },
     }),
   ],

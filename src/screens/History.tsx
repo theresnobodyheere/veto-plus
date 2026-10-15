@@ -44,7 +44,7 @@ export function History() {
                   <span class="grow">
                     <b>{c.ref || speciesById(c.species).label}</b>
                     <div class="sub">{c.summary?.top ?? 'Pas d’hypothèse'}</div>
-                    <div class="fine">{speciesById(c.species).label}{c.breed ? ` ${c.breed.toLowerCase()}` : ''} · {new Date(c.updatedAt).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}{c.photos.length ? ` · ${c.photos.length} photo${c.photos.length > 1 ? 's' : ''}` : ''}</div>
+                    <div class="fine">{speciesById(c.species).label}{c.breed ? ` ${c.breed.toLowerCase()}` : ''} · {new Date(c.updatedAt).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}</div>
                   </span>
                   {!!c.summary?.critical && <span class="tag crit">{c.summary.critical} alerte{c.summary.critical > 1 ? 's' : ''}</span>}
                   {!edit && <Chevron />}

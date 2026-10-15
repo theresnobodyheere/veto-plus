@@ -17,10 +17,11 @@ const formLabel = (id: string) => FORMS.find((f) => f.id === id)?.label ?? id;
 const spLabel = (id: SpeciesId) => SPECIES_FILTERS.find((f) => f.id === id)?.label ?? id;
 
 export function Drugs() {
-  const initialEsp = new URLSearchParams(route.value.split('?')[1] ?? '').get('esp') as SpeciesId | null;
+  const params = new URLSearchParams(route.value.split('?')[1] ?? '');
+  const initialEsp = params.get('esp') as SpeciesId | null;
   const [db, setDb] = useState<DrugDb | null>(null);
   const [err, setErr] = useState('');
-  const [q, setQ] = useState('');
+  const [q, setQ] = useState(params.get('q') ?? '');
   const [f, setF] = useState<DrugFilter>({ sp: SPECIES_FILTERS.some((x) => x.id === initialEsp) ? initialEsp! : undefined });
   const [shown, setShown] = useState(PAGE);
   const [sel, setSel] = useState<DrugProduct | null>(null);

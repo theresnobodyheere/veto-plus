@@ -5,14 +5,16 @@ Conçue pour un exercice mixte : canine, bovins, ovins, caprins, équins, porcin
 
 ## Fonctions
 
-- Photo d’un compte rendu d’analyses → valeurs (Tesseract, sur l’iPhone)
+- **Saisie du cas en questions successives** : motif, âge, sexe et stade, température, signes, questions ciblées, examen, race, poids. Un choix fait passer à la suite, les valeurs normales de l’espèce sont affichées, l’hypothèse en tête s’affiche en direct
+- Compte rendu d’analyses scanné avec « Analyser le texte » de l’iPhone (texte en direct d’iOS, hors ligne) ou collé → valeurs et intervalles
 - Interprétation, intervalles par espèce, conversions d’unités
 - **Alertes vitales** (K⁺, glycémie, Ca, Mg, lactates, Ht, BHB…)
-- Diagnostic différentiel classé (≈ 90 maladies, sources citées), avec un avertissement quand les éléments sont insuffisants et les **signes à rechercher** pour départager les hypothèses (un toucher les ajoute et met à jour le classement)
+- Diagnostic différentiel classé (≈ 110 maladies, sources citées), avec un avertissement quand les éléments sont insuffisants et les **signes à rechercher** pour départager les hypothèses (un toucher les ajoute et met à jour le classement)
+- **Conduite à tenir et quantités calculées pour le poids** pour une quarantaine d’affections fréquentes
 - Médicaments ANMV (3 200+), **temps d’attente**, RCP, calcul de dose
 - Calculateurs : fluides, veau diarrhéique, transfusion, électrolytes, RER, dose, unités, gestation
 - Maladies réglementées, contacts DDETSPP / GDS / CNITV, fiches faune et herpès B
-- Dictée vocale (touche micro du clavier iOS), historique sur l’iPhone, PDF partageable
+- Historique sur l’iPhone, PDF partageable (avec la conduite à tenir)
 
 ## Mise en ligne (gratuite, GitHub Pages) — une seule fois
 
@@ -32,7 +34,7 @@ Chaque `git push` republie l’appli. La base médicaments est retéléchargée 
 
 1. Ouvrir l’adresse dans **Safari**.
 2. Bouton **Partager** → **Sur l’écran d’accueil**.
-3. Ouvrir l’appli une fois avec du réseau : tout est mis en cache (environ 20 Mo), puis elle fonctionne hors ligne.
+3. Ouvrir l’appli une fois avec du réseau : tout est mis en cache (environ 10 Mo), puis elle fonctionne hors ligne.
 
 Les mises à jour sont proposées par un bandeau « Nouvelle version disponible », jamais imposées en pleine consultation.
 
@@ -40,19 +42,19 @@ Les mises à jour sont proposées par un bandeau « Nouvelle version disponible 
 
 - **Intervalles de référence** : Réglages → Intervalles de la clinique, pour les adapter aux automates de la clinique. L’intervalle imprimé sur un compte rendu reste toujours prioritaire.
 - **Contacts** : dans Réglages, saisir les numéros de la DDETSPP, du GDS et du laboratoire départemental. Ils restent sur l’iPhone.
-- Relire la base de maladies (`src/data/diseases.ts`) et les seuils d’alerte (`src/engine/alerts.ts`).
+- Relire la base de maladies (`src/data/diseases.ts`), les seuils d’alerte (`src/engine/alerts.ts`) et les protocoles et posologies (`src/data/treatments.ts`).
 
 ## Développement
 
 ```bash
 npm install
 npm run dev          # serveur local
-npm test             # tests du moteur, de l’OCR, du PDF
+npm test             # tests du moteur, des cas de référence, des doses, du PDF
 npm run build        # version de production dans dist/
 npm run data:anmv    # retélécharge la base ANMV (nécessite 7z)
 ```
 
-Structure : `src/data` (espèces, analytes, intervalles, signes, maladies, réglementation, faune), `src/engine` (interprétation, alertes, diagnostic différentiel, calculs), `src/ocr` (Tesseract + analyse du texte), `src/screens` (écrans).
+Structure : `src/data` (espèces, analytes, intervalles, signes, maladies, réglementation, faune), `src/data/wizard.ts` (étapes du parcours), `src/data/treatments.ts` (conduite à tenir), `src/engine` (interprétation, lecture des comptes rendus, alertes, diagnostic différentiel, calculs), `src/screens` (écrans). Les cas de référence (`tests/cases.test.ts`) bloquent la publication en cas de régression.
 
 ## Sources
 

@@ -52,8 +52,8 @@ function Welcome() {
     <Sheet title="" doneLabel="" onClose={accept}>
       <div class="welcome">
         <h1>Bienvenue dans Véto+</h1>
-        <div class="feature"><Icon name="flask" /><div><b>Analyses lues en photo</b><p>Valeurs, intervalles par espèce, alertes vitales et diagnostic différentiel.</p></div></div>
-        <div class="feature"><Icon name="wifiOff" /><div><b>Fonctionne hors ligne</b><p>Tout est calculé sur l’iPhone, sans réseau ni compte : lecture des photos, diagnostic, médicaments ANMV et calculateurs. Aucune donnée ne quitte l’appareil.</p></div></div>
+        <div class="feature"><Icon name="flask" /><div><b>Comptes rendus scannés avec l’iPhone</b><p>Valeurs, intervalles par espèce, alertes vitales et diagnostic différentiel.</p></div></div>
+        <div class="feature"><Icon name="wifiOff" /><div><b>Fonctionne hors ligne</b><p>Tout est calculé sur l’iPhone, sans réseau ni compte : lecture des comptes rendus, diagnostic, médicaments ANMV et calculateurs. Aucune donnée ne quitte l’appareil.</p></div></div>
         {!standalone && (
           <div class="feature"><Icon name="share" /><div><b>Installer sur l’iPhone</b><p>Dans Safari, touchez Partager, puis « Sur l’écran d’accueil ».</p></div></div>
         )}

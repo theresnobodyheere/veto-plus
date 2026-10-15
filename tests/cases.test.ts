@@ -1,0 +1,181 @@
+// Cas de référence : motifs de consultation fréquents saisis comme dans le parcours de l'appli.
+// Chaque cas vérifie l'hypothèse attendue en tête et, pour quelques-uns, ce qui ne doit pas y figurer.
+import { describe, expect, it } from 'vitest';
+import { newCase, setAnswer, setMeasure, toggleSign, setLab, patch, freezeQuestions, analysis, canAnalyse, draft } from '../src/state/case';
+import { buildSteps, MOTIFS, answerSigns } from '../src/data/wizard';
+import { SIGNS, LAB_FINDINGS } from '../src/data/signs';
+import { DISEASES } from '../src/data/diseases';
+import { TREATMENTS, treatmentFor, lineDose } from '../src/data/treatments';
+import { SPECIES, type SpeciesId } from '../src/data/species';
+
+interface Input {
+  motif: string; herd?: string; age?: string; sex?: string; stage?: string; temp?: string; hr?: string; muq?: string; hyd?: string;
+  signs?: string[]; yes?: string[]; no?: string[]; labs?: Record<string, number>; breed?: string; weight?: number;
+}
+
+function run(species: SpeciesId, x: Input) {
+  newCase(species);
+  for (const k of ['motif', 'herd', 'age', 'sex', 'stage', 'temp', 'hr', 'muq', 'hyd'] as const) if (x[k]) setAnswer(k, x[k]);
+  for (const s of x.signs ?? []) toggleSign(s);
+  for (const [analyte, value] of Object.entries(x.labs ?? {})) setLab({ analyte, value, source: 'manuel' });
+  if (x.breed) patch({ breed: x.breed });
+  if (x.weight) patch({ weight: x.weight });
+  for (const s of x.yes ?? []) setAnswer(`q:${s}`, 'oui');
+  for (const s of x.no ?? []) setAnswer(`q:${s}`, 'non');
+  // Les questions ciblées comptent si elles font partie du parcours
+  if (x.yes?.length || x.no?.length) patch({ questions: [...(x.yes ?? []), ...(x.no ?? [])].map((id) => ({ id, label: id, supports: [] })) });
+  return analysis.value!;
+}
+
+const top = (a: ReturnType<typeof run>) => a.ddx[0]?.disease.id;
+
+const CASES: [string, SpeciesId, Input, string][] = [
+  ['pyomètre', 'chien', { motif: 'pupd', age: 'age', sex: 'fe', stage: 'chaleurs', signs: ['abattement', 'vomissements', 'ecoulement_vulvaire'] }, 'pyometre'],
+  ['parvovirose', 'chien', { motif: 'dig', age: 'jeune', sex: 'me', temp: 'haut', signs: ['diarrhee_hemorragique', 'vomissements', 'abattement', 'non_vaccine'] }, 'parvovirose'],
+  ['dilatation-torsion', 'chien', { motif: 'urg', age: 'adulte', sex: 'me', signs: ['vomissements_improductifs', 'distension_abdo', 'ptyalisme'], breed: 'Berger allemand' }, 'sdte'],
+  ['obstruction urétrale', 'chat', { motif: 'uri', age: 'adulte', sex: 'mc', signs: ['dysurie', 'anurie', 'vomissements'], labs: { k: 7.8 } }, 'obstruction_uretrale'],
+  ['cystite de la chienne', 'chien', { motif: 'uri', age: 'adulte', sex: 'fs', temp: 'normal', signs: ['dysurie', 'hematurie'] }, 'cystite'],
+  ['hyperthyroïdie', 'chat', { motif: 'pupd', age: 'age', sex: 'mc', signs: ['amaigrissement', 'polyphagie'], labs: { t4: 85 } }, 'hyperthyroidie'],
+  ['maladie rénale', 'chat', { motif: 'pupd', age: 'age', signs: ['amaigrissement', 'vomissements'], labs: { crea: 380, uree: 25 } }, 'irc'],
+  ['Addison', 'chien', { motif: 'dig', age: 'adulte', signs: ['vomissements', 'diarrhee', 'abattement'], labs: { na: 128, k: 7.2 } }, 'addison'],
+  ['gastro-entérite', 'chien', { motif: 'dig', age: 'adulte', sex: 'me', temp: 'normal', signs: ['diarrhee', 'vomissements', 'ecart_alimentaire'] }, 'gastro_aigue'],
+  ['diarrhée hémorragique de l’adulte', 'chien', { motif: 'dig', age: 'adulte', signs: ['diarrhee_hemorragique', 'vomissements'], labs: { ht: 64 } }, 'sdha'],
+  ['dermatite allergique', 'chien', { motif: 'peau', age: 'adulte', signs: ['prurit', 'puces', 'lesions_cutanees'] }, 'dermatite_allergique'],
+  ['otite', 'chien', { motif: 'peau', signs: ['otite', 'prurit'] }, 'otite'],
+  ['arthrose', 'chien', { motif: 'loco', age: 'age', signs: ['raideur_lever', 'boiterie'] }, 'arthrose'],
+  ['hernie discale', 'chien', { motif: 'neuro', age: 'adulte', signs: ['douleur_rachis', 'paresie'] }, 'hernie_discale'],
+  ['toux de chenil', 'chien', { motif: 'resp', age: 'adulte', temp: 'normal', signs: ['toux', 'collectivite'] }, 'toux_chenil'],
+  ['insuffisance cardiaque', 'chien', { motif: 'resp', age: 'age', signs: ['toux', 'souffle', 'intolerance_effort'], hr: 'haut' }, 'icc_chien'],
+  ['coup de chaleur', 'chien', { motif: 'urg', temp: 'tres_haut', signs: ['chaleur_ambiante', 'dyspnee'] }, 'coup_chaleur'],
+  ['raticide', 'chien', { motif: 'urg', signs: ['toxique', 'hemorragies'], muq: 'pales' }, 'avk'],
+  ['éclampsie', 'chien', { motif: 'repro', age: 'adulte', sex: 'fe', stage: 'misebas', temp: 'tres_haut', signs: ['tremblements', 'convulsions'] }, 'eclampsie'],
+  ['babésiose', 'chien', { motif: 'abat', age: 'adulte', temp: 'haut', signs: ['tiques', 'urines_foncees'] }, 'babesiose_chien'],
+  ['fièvre de lait', 'bovin', { motif: 'couche', herd: 'seul', age: 'adulte', sex: 'f', stage: 'misebas', temp: 'bas', signs: ['tremblements'] }, 'fievre_lait'],
+  ['cétose', 'bovin', { motif: 'lait', herd: 'seul', age: 'adulte', sex: 'f', stage: 'lactation', signs: ['haleine_cetonique'], labs: { bhb: 3.5 } }, 'cetose_bovin'],
+  ['déplacement de caillette', 'bovin', { motif: 'lait', age: 'adulte', sex: 'f', stage: 'lactation', signs: ['ping_gauche'] }, 'dcg'],
+  ['mammite simple', 'bovin', { motif: 'mam', herd: 'seul', age: 'adulte', sex: 'f', stage: 'autre', temp: 'normal' }, 'mammite_clinique'],
+  ['mammite colibacillaire', 'bovin', { motif: 'mam', age: 'adulte', sex: 'f', stage: 'misebas', temp: 'haut', signs: ['abattement', 'decubitus', 'deshydratation'] }, 'mammite_coli'],
+  ['diarrhée du veau', 'bovin', { motif: 'dig', age: 'jeune', signs: ['diarrhee'], hyd: 'moderee' }, 'diarrhee_neonatale'],
+  ['bronchopneumonie', 'bovin', { motif: 'resp', herd: 'plusieurs', age: 'jeune', temp: 'haut', signs: ['toux', 'jetage'] }, 'bpie'],
+  ['réticulo-péritonite', 'bovin', { motif: 'dig', age: 'adulte', sex: 'f', temp: 'haut', signs: ['arret_rumination', 'douleur_garrot'] }, 'rpt'],
+  ['tétanie d’herbage', 'bovin', { motif: 'neuro', age: 'adulte', signs: ['convulsions', 'paturage'], labs: { mg: 0.4 } }, 'tetanie'],
+  ['toxémie de gestation', 'ovin', { motif: 'couche', age: 'adulte', sex: 'f', stage: 'gestante', signs: ['cecite', 'tremblements'] }, 'toxemie_gestation'],
+  ['listériose', 'caprin', { motif: 'neuro', age: 'adulte', signs: ['tete_penchee', 'paralysie_faciale', 'ensilage'] }, 'listeriose'],
+  ['colique chirurgicale', 'cheval', { motif: 'colique', signs: ['colique_severe', 'reflux_gastrique'], hr: 'tres_haut', muq: 'congestives' }, 'colique_chir'],
+  ['colique médicale', 'cheval', { motif: 'colique', hr: 'normal', signs: ['constipation'] }, 'colique_med'],
+  ['fourbure', 'cheval', { motif: 'loco', signs: ['pouls_digites', 'boiterie', 'prise_poids', 'paturage'] }, 'fourbure'],
+  ['abcès de pied', 'cheval', { motif: 'loco', signs: ['boiterie_aigue_1', 'lesions_podales'] }, 'abces_pied'],
+  ['rhabdomyolyse', 'cheval', { motif: 'muscle', signs: ['myalgie', 'urines_foncees', 'effort_recent'], labs: { ck: 25000 } }, 'rhabdomyolyse'],
+  ['asthme équin', 'cheval', { motif: 'resp', age: 'age', temp: 'normal', signs: ['toux', 'dyspnee'] }, 'asthme_equin'],
+  ['obstruction œsophagienne', 'cheval', { motif: 'resp', signs: ['aliment_naseaux', 'ptyalisme'] }, 'obstruction_oeso'],
+  ['gourme', 'cheval', { motif: 'resp', age: 'jeune', temp: 'haut', signs: ['adenomegalie', 'jetage'] }, 'gourme'],
+];
+
+describe('cas de référence', () => {
+  for (const [label, sp, input, expected] of CASES) {
+    it(`${label} (${sp})`, () => {
+      const a = run(sp, input);
+      expect(top(a), `classement : ${a.ddx.slice(0, 4).map((r) => r.disease.id).join(' > ')}`).toBe(expected);
+    });
+  }
+
+  it('un chien qui se gratte n’évoque pas la maladie d’Aujeszky sans contact avec un sanglier', () => {
+    const a = run('chien', { motif: 'peau', signs: ['prurit'] });
+    expect(a.ddx.slice(0, 3).map((r) => r.disease.id)).not.toContain('aujeszky_chien');
+  });
+  it('« raideur au lever » n’évoque pas le tétanos', () => {
+    const a = run('chien', { motif: 'loco', age: 'age', signs: ['raideur_lever'] });
+    expect(a.ddx.map((r) => r.disease.id)).not.toContain('tetanos');
+  });
+  it('un « Non » à une question ciblée fait reculer l’hypothèse', () => {
+    const base = run('chien', { motif: 'pupd', age: 'age', sex: 'fe', stage: 'chaleurs', signs: ['abattement'] });
+    const s1 = base.ddx.find((r) => r.disease.id === 'pyometre')!.score;
+    const after = run('chien', { motif: 'pupd', age: 'age', sex: 'fe', stage: 'chaleurs', signs: ['abattement'], no: ['ecoulement_vulvaire'] });
+    expect(after.ddx.find((r) => r.disease.id === 'pyometre')!.score).toBeLessThan(s1);
+    expect(after.absent).toContain('ecoulement_vulvaire');
+  });
+  it('la température mesurée prime sur la plage choisie', () => {
+    run('chien', { motif: 'abat', temp: 'haut' });
+    expect(analysis.value!.findings).toContain('fievre');
+    setMeasure('temp', 38.6);
+    expect(analysis.value!.findings).not.toContain('fievre');
+    setAnswer('temp', 'bas');
+    expect(draft.value!.temp).toBeUndefined();
+    expect(analysis.value!.findings).toContain('hypothermie');
+  });
+});
+
+describe('parcours', () => {
+  it('l’analyse se débloque après le motif et 3 réponses', () => {
+    newCase('chien');
+    setAnswer('motif', 'dig');
+    expect(canAnalyse.value).toBe(false);
+    setAnswer('age', 'adulte');
+    setAnswer('sex', 'me');
+    expect(canAnalyse.value).toBe(false);
+    toggleSign('vomissements');
+    toggleSign('diarrhee');
+    expect(canAnalyse.value).toBe(true);
+  });
+  it('les questions ciblées s’insèrent après les signes', () => {
+    run('chien', { motif: 'pupd', age: 'age', sex: 'fe', stage: 'chaleurs' });
+    freezeQuestions();
+    const ids = buildSteps(draft.value!).map((s) => s.id);
+    const q = ids.filter((x) => x.startsWith('q:'));
+    expect(q.length).toBeGreaterThan(0);
+    expect(q.length).toBeLessThanOrEqual(3);
+    expect(ids.indexOf(q[0])).toBe(ids.indexOf('signs') + 1);
+  });
+  it('le stade ne s’affiche que pour une femelle adulte', () => {
+    newCase('bovin');
+    setAnswer('motif', 'lait');
+    setAnswer('sex', 'm');
+    expect(buildSteps(draft.value!).some((s) => s.id === 'stage')).toBe(false);
+    setAnswer('sex', 'f');
+    expect(buildSteps(draft.value!).some((s) => s.id === 'stage')).toBe(true);
+    setAnswer('stage', 'misebas');
+    expect(answerSigns(draft.value!).present).toEqual(expect.arrayContaining(['mise_bas_recente', 'debut_lactation']));
+    setAnswer('age', 'jeune');
+    expect(draft.value!.answers?.stage).toBeUndefined();
+  });
+  it('un bilan sanguin fait passer les analyses en deuxième', () => {
+    newCase('chat');
+    setAnswer('motif', 'bilan');
+    expect(buildSteps(draft.value!)[1].id).toBe('labs');
+  });
+  it('tous les signes du parcours existent', () => {
+    const known = new Set([...SIGNS.map((s) => s.id), ...Object.keys(LAB_FINDINGS)]);
+    for (const list of Object.values(MOTIFS)) for (const m of list) for (const s of [...(m.signs ?? []), ...m.sugg]) expect(known.has(s), `${m.id} : ${s}`).toBe(true);
+    for (const sp of SPECIES) {
+      newCase(sp.id);
+      for (const st of buildSteps(draft.value!)) for (const o of st.options ?? []) for (const s of o.signs ?? []) expect(known.has(s), `${sp.id} ${st.id} : ${s}`).toBe(true);
+    }
+  });
+});
+
+describe('conduite à tenir', () => {
+  it('chaque protocole correspond à une maladie de la base', () => {
+    const ids = new Set(DISEASES.map((d) => d.id));
+    for (const id of Object.keys(TREATMENTS)) expect(ids.has(id), id).toBe(true);
+  });
+  it('quantités calculées pour le poids', () => {
+    const t = treatmentFor('pyometre', 'chien')!;
+    const agl = t.lines.find((l) => l.what.startsWith('Aglépristone'))!;
+    expect(lineDose(agl, 28)).toBe('280 mg = 9,3 mL');
+    expect(lineDose(t.lines.find((l) => l.mlkg)!, 28)).toBe('280 mL');
+    expect(lineDose(agl, undefined)).toBeUndefined();
+  });
+  it('les lignes propres à une espèce sont filtrées', () => {
+    expect(treatmentFor('pyometre', 'chat')!.lines.some((l) => l.what.startsWith('Aglépristone'))).toBe(false);
+    expect(treatmentFor('fievre_lait', 'ovin')!.lines[0].fixed).toBe('50 à 100 mL');
+    // Faune : protocole de l'espèce de référence
+    expect(treatmentFor('pyometre', 'loup')!.lines.some((l) => l.what.startsWith('Aglépristone'))).toBe(true);
+  });
+  it('une dose fixe s’affiche sans poids', () => {
+    expect(lineDose(treatmentFor('cetose_bovin', 'bovin')!.lines[0])).toBe('300 mL/j');
+  });
+  it('petites doses lisibles', () => {
+    const bup = treatmentFor('pancreatite', 'chat')!.lines.find((l) => l.q === 'buprénorphine')!;
+    expect(lineDose(bup, 4)).toBe('0,08 mg = 0,27 mL');
+  });
+});

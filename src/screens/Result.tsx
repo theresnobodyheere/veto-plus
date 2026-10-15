@@ -1,5 +1,5 @@
 import { useState } from 'preact/hooks';
-import { draft, analysis, toggleSign, persist } from '../state/case';
+import { draft, analysis, toggleSign, persist, step } from '../state/case';
 import { speciesById } from '../data/species';
 import { signLabel } from '../data/signs';
 import { formatValue } from '../engine/interpret';
@@ -9,6 +9,8 @@ import { Icon } from '../components/Icon';
 import { go } from '../lib/router';
 import { settings } from '../state/settings';
 import { departementByCode } from '../data/departements';
+import { treatmentFor, lineDose, needsWeight } from '../data/treatments';
+import { buildSteps } from '../data/wizard';
 
 export function Result() {
   const d = draft.value;
@@ -20,6 +22,7 @@ export function Result() {
   const flagged = a.ddx.filter((r) => likelihood(r, best) !== 'faible').slice(0, 6);
   const regulated = flagged.filter((r) => r.disease.regulated);
   const zoonoses = flagged.filter((r) => r.disease.zoonose && !r.disease.regulated);
+  const clinical = a.findings.filter((f) => !a.labFindings.includes(f));
 
   const exportPdf = async () => {
     try {
@@ -89,6 +92,7 @@ export function Result() {
                       <ul>{r.disease.tests.map((t) => <li key={t}>{t}</li>)}</ul>
                     </div>
                     {r.disease.note && <p>{r.disease.note}</p>}
+                    <Treatment diseaseId={r.disease.id} />
                     {r.disease.regulated && <p><b>Réglementation :</b> {r.disease.regulated}</p>}
                     <p class="fine">Source : {r.disease.src}</p>
                   </div>
@@ -102,10 +106,16 @@ export function Result() {
 
         {a.rows.length > 0 && <LabSummary />}
 
-        {d.signs.length > 0 && (
+        {clinical.length > 0 && (
           <>
-            <div class="section-title">Signes retenus</div>
-            <div class="chips">{d.signs.map((s) => <span key={s} class="chip">{signLabel(s)}</span>)}</div>
+            <div class="section-title">Éléments retenus</div>
+            <div class="chips">{clinical.map((s) => <span key={s} class="chip">{signLabel(s)}</span>)}</div>
+          </>
+        )}
+        {a.absent.length > 0 && (
+          <>
+            <div class="section-title">Recherchés, absents</div>
+            <div class="chips">{a.absent.map((s) => <span key={s} class="chip" style="text-decoration:line-through;color:var(--muted)">{signLabel(s)}</span>)}</div>
           </>
         )}
 
@@ -114,6 +124,52 @@ export function Result() {
         </p>
       </main>
     </>
+  );
+}
+
+/** Conduite à tenir et quantités pour le poids de l'animal, quand un protocole standard existe */
+function Treatment({ diseaseId }: { diseaseId: string }) {
+  const d = draft.value!;
+  const t = treatmentFor(diseaseId, d.species);
+  if (!t) return null;
+  const sp = speciesById(d.species);
+  const esp = sp.proxy ?? sp.id;
+  const missingWeight = !d.weight && t.lines.some(needsWeight);
+  const askWeight = () => { step.value = buildSteps(d).findIndex((s) => s.id === 'weight'); go('/cas'); };
+  return (
+    <div>
+      <div class="label">Conduite à tenir</div>
+      {t.note && <p class="tx-note">{t.note}</p>}
+      {missingWeight && (
+        <div class="row" style="margin:4px 0 6px">
+          <span class="grow fine">Poids non renseigné : quantités non calculées.</span>
+          <button class="btn small" onClick={askWeight}>Saisir le poids</button>
+        </div>
+      )}
+      <div class="tx">
+        {t.lines.map((l, i) => {
+          const dose = lineDose(l, d.weight);
+          return (
+            <div class="tx-row" key={i}>
+              <div><div class="tx-phase">{l.phase}</div><div class="tx-what">{l.what}</div></div>
+              <div class="tx-dose">{dose ?? ''}</div>
+              <div class="tx-how">{l.how}</div>
+              {(l.q || l.tool) && (
+                <div class="tx-links">
+                  {l.q && <a href={`#/medicaments?esp=${esp}&q=${encodeURIComponent(l.q)}`}>Spécialités et RCP</a>}
+                  {l.tool && <a href={`#/outils/${l.tool}`}>Calculateur</a>}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <p class="fine">
+        {d.weight ? `Calculé pour ${String(d.weight).replace('.', ',')} kg. ` : ''}
+        {sp.proxy ? `Posologies de l’espèce de référence (${speciesById(sp.proxy).label.toLowerCase()}), à adapter. ` : ''}
+        Vérifier chaque dose dans le RCP{sp.food ? ', ainsi que les temps d’attente viande et lait' : ''}.
+      </p>
+    </div>
   );
 }
 
@@ -161,7 +217,7 @@ function Refine() {
   const d = draft.value!;
   const a = analysis.value!;
   if (!a.ddx.length) return null;
-  const { signs, labs } = discriminants(d.species, a.ddx, a.findings);
+  const { signs, labs } = discriminants(d.species, a.ddx, a.findings, 8, a.absent);
   if (!signs.length && !labs.length) return null;
   const add = (id: string) => { toggleSign(id); void persist(); };
   return (

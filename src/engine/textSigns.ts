@@ -1,6 +1,5 @@
-// Repère les signes cliniques mentionnés dans un texte libre (notes, dictée).
-// Tolérant : accords (couché / couchée), formes dérivées (apathique / apathie), fautes de frappe,
-// mots intercalés (« ventre très gonflé »). Un signe précédé d'une négation (« pas de », « sans »…) est écarté.
+// Recherche tolérante de signes et d'expressions (champ de recherche des signes, noms de races) :
+// accords (couché / couchée), formes dérivées (apathique / apathie), fautes de frappe, petits mots intercalés.
 import { SIGNS, type Sign } from '../data/signs';
 import { speciesById, type SpeciesId } from '../data/species';
 
@@ -9,9 +8,9 @@ export const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀
 // « mort-aux-rats » est un toxique, pas une mortalité
 const tokens = (s: string) => norm(s).replace(/mort[\s-]+aux[\s-]+rats?/g, 'raticide').replace(/[^a-z0-9]+/g, ' ').trim().split(' ').filter(Boolean);
 
-/** Racine : sans marques de pluriel / féminin ni suffixe -ique / -ie / -ement (gardée si au moins 5 lettres) */
+/** Racine : sans marques de pluriel / féminin / conjugaison ni suffixe -ique / -ie / -ement (gardée si au moins 5 lettres) */
 function root(w: string): string {
-  for (const suf of ['issements', 'issement', 'ements', 'ement', 'iques', 'ique', 'ies', 'ie', 'ees', 'ee', 'es', 'e', 's', 'x']) {
+  for (const suf of ['issements', 'issement', 'ements', 'ement', 'aient', 'ait', 'ent', 'iques', 'ique', 'ies', 'ie', 'ees', 'ee', 'es', 'e', 's', 'x']) {
     if (w.endsWith(suf) && w.length - suf.length >= 5) return w.slice(0, -suf.length);
   }
   return w;
@@ -34,34 +33,14 @@ function same(text: string, want: string): boolean {
   // Mots courts : forme exacte ou pluriel seulement (« boit » ≠ « boite », « sang » ≠ « sanglier »)
   if (want.length < 5 || text.length < 5) return false;
   if (root(text) === root(want)) return true;
+  // « anormal » n'est pas une faute de frappe de « normal »
+  if (text === `a${want}` || want === `a${text}`) return false;
   // Faute de frappe sur un mot assez long
   return want.length >= 7 && nearlyEqual(text, want);
 }
 
-/** Mots qui annulent un signe placé juste après : « pas de fièvre », « sans diarrhée », « ne vomit pas », « ni toux » */
-const NEG_BEFORE = new Set(['pas', 'sans', 'aucun', 'aucune', 'ni', 'absence', 'non', 'ne', 'n', 'jamais', 'rien']);
-const NEG_AFTER = new Set(['pas', 'jamais']);
 /** Petits mots ignorés entre deux mots d'une expression (« ventre très gonflé », « perte de poids ») */
 const FILLER = new Set(['de', 'du', 'des', 'd', 'le', 'la', 'les', 'l', 'un', 'une', 'tres', 'bien', 'peu', 'assez', 'trop', 'plus', 'tout', 'il', 'elle', 'est', 'a', 'se', 's', 'en']);
-
-interface Phrase { sign: string; words: string[] }
-
-const phraseCache = new Map<string, Phrase[]>();
-function phrases(species: SpeciesId): Phrase[] {
-  let p = phraseCache.get(species);
-  if (p) return p;
-  p = [];
-  for (const s of signsForSpecies(species)) {
-    // Libellé principal (avant « / » ou « ( »), chaque partie après « / », puis mots-clés
-    const labels = s.label.split('(')[0].split('/');
-    for (const k of [...labels, ...(s.kw ?? [])]) {
-      const words = tokens(k);
-      if (words.join('').length >= 3) p.push({ sign: s.id, words });
-    }
-  }
-  phraseCache.set(species, p);
-  return p;
-}
 
 /** Position de l'expression dans le texte : chaque mot attendu, avec au plus un petit mot intercalé */
 function find(t: string[], words: string[]): { start: number; end: number } | null {
@@ -79,14 +58,7 @@ function find(t: string[], words: string[]): { start: number; end: number } | nu
   return null;
 }
 
-function negated(t: string[], start: number, end: number, words: string[]): boolean {
-  // La négation fait partie de l'expression (« ne mange pas », « non stérilisée ») : rien à écarter
-  if (words.some((w) => NEG_BEFORE.has(w) || NEG_AFTER.has(w))) return false;
-  for (let k = Math.max(0, start - 3); k < start; k++) if (NEG_BEFORE.has(t[k])) return true;
-  return NEG_AFTER.has(t[end + 1] ?? '');
-}
-
-/** L'expression figure-t-elle dans le texte (mêmes tolérances que pour les signes, sans négation) ? */
+/** L'expression figure-t-elle dans le texte ? */
 export function hasPhrase(text: string, phrase: string): boolean {
   const words = tokens(phrase);
   return words.length > 0 && find(tokens(text), words) != null;
@@ -95,18 +67,6 @@ export function hasPhrase(text: string, phrase: string): boolean {
 export function signsForSpecies(species: SpeciesId): Sign[] {
   const fam = new Set<SpeciesId>([species, ...speciesById(species).ddx]);
   return SIGNS.filter((s) => !s.species || s.species.some((x) => fam.has(x)));
-}
-
-/** Signes affirmés dans un texte (une proposition, de préférence : la négation porte sur les mots voisins) */
-export function matchSigns(text: string, species: SpeciesId): string[] {
-  const t = tokens(text);
-  const hits = new Set<string>();
-  for (const p of phrases(species)) {
-    if (hits.has(p.sign)) continue;
-    const at = find(t, p.words);
-    if (at && !negated(t, at.start, at.end, p.words)) hits.add(p.sign);
-  }
-  return [...hits];
 }
 
 export function searchSigns(q: string, species: SpeciesId): Sign[] {
