@@ -6,14 +6,14 @@ Conçue pour un exercice mixte : canine, bovins, ovins, caprins, équins, porcin
 ## Fonctions
 
 - **Saisie du cas en questions successives** : motif, effectif du lot, âge (en semaines chez le nouveau-né de rente), sexe et stade, nombre de lactations, durée d’évolution, examen général sur un seul écran, signes, questions ciblées, toxique, prévention et traitements récents, race, poids. Un choix fait passer à la suite, les valeurs normales de l’espèce sont affichées, l’hypothèse en tête s’affiche en direct. En urgence, l’examen passe juste après le motif
-- **Une réponse normale compte** : normotherme, muqueuses roses, femelle stérilisée, animal seul… écartent les hypothèses qui en font un signe cardinal
+- **Une réponse normale compte** : normotherme, muqueuses roses, femelle stérilisée, animal seul… écartent les hypothèses qui en font un signe cardinal ; une analyse dans les normes aussi (créatinine normale : pas d’azotémie), et une valeur déjà dosée n’est plus proposée « à doser »
 - **Examen général** : conscience, température, FC, FR, muqueuses, TRC, hydratation, gestes propres à l’espèce (rumen, ping, garrot ; bruits digestifs, reflux, palpation transrectale ; palpation abdominale, auscultation), douleur, état corporel
 - **Commémoratifs** tapés ou dictés : les signes reconnus dans le texte sont proposés
 - **Saison** du cas prise en compte automatiquement (piroplasmose, tétanie d’herbage, FCO, myopathie atypique…)
 - **Intoxications guidées** : toxique, délai, antidote, décontamination, lien CNITV
 - Poids **estimé au ruban** (tour de poitrine et longueur) quand il n’y a pas de bascule
 - **Sauvegarde continue** : un cas interrompu se reprend à la même étape ; **visite de suivi** du même animal avec l’évolution dans le PDF
-- Saisie des valeurs d’analyses, avec conversion d’unités
+- Saisie des valeurs d’analyses, avec conversion d’unités, et **pression artérielle systolique** (chien, chat : seuils ACVIM 2018, hypertension ≥ 160 mmHg, alerte ≥ 180)
 - Interprétation, intervalles par espèce, conversions d’unités
 - **Alertes vitales** (K⁺, glycémie, Ca, Mg, lactates, Ht, BHB…)
 - Diagnostic différentiel classé (≈ 110 maladies, sources citées), avec un avertissement quand les éléments sont insuffisants et les **signes à rechercher** pour départager les hypothèses (un toucher les ajoute et met à jour le classement)

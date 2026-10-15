@@ -3,7 +3,7 @@ import { signal, computed, effect } from '@preact/signals';
 import type { CaseRecord } from '../db/db';
 import { saveCase } from '../db/db';
 import type { SpeciesId } from '../data/species';
-import { interpretLab, deriveFindings, type LabValue } from '../engine/interpret';
+import { interpretLab, deriveFindings, deriveAbsent, type LabValue } from '../engine/interpret';
 import { computeAlerts } from '../engine/alerts';
 import { rankDiseases, discriminants } from '../engine/ddx';
 import { settings } from './settings';
@@ -134,7 +134,9 @@ export const analysis = computed(() => {
   // Une valeur mesurée dans les normes écarte les anomalies correspondantes, comme la plage « Normale »
   const normalMeasures = vitalsFor(d.species) ? ([['temp', tempFinding], ['hr', hrFinding], ['rr', rrFinding]] as const)
     .filter(([k, f]) => d[k] != null && !f(d.species, d[k])).flatMap(([k]) => NORMAL_ABSENT[k]) : [];
-  const absent = [...new Set([...fromAnswers.absent, ...normalMeasures])].filter((x) => !findings.includes(x));
+  // Une analyse dans les normes écarte les anomalies qu'elle recherche (créatinine normale : pas d'azotémie)
+  const labAbsent = deriveAbsent(d.species, rows);
+  const absent = [...new Set([...fromAnswers.absent, ...normalMeasures, ...labAbsent])].filter((x) => !findings.includes(x));
   return {
     rows,
     labFindings,

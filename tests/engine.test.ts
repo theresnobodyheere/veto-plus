@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { interpretLab, deriveFindings, type LabValue } from '../src/engine/interpret';
+import { interpretLab, deriveFindings, deriveAbsent, type LabValue } from '../src/engine/interpret';
+import { RANGES } from '../src/data/ranges';
 import { computeAlerts } from '../src/engine/alerts';
 import { rankDiseases, likelihood, confidence, discriminants, strength } from '../src/engine/ddx';
 import { normalizeUnit, ANALYTES } from '../src/data/analytes';
@@ -27,6 +28,23 @@ describe('base de connaissances', () => {
     expect(new Set(DISEASES.map((d) => d.id)).size).toBe(DISEASES.length);
     expect(new Set(SIGNS.map((s) => s.id)).size).toBe(SIGNS.length);
     expect(new Set(ANALYTES.map((a) => a.id)).size).toBe(ANALYTES.length);
+  });
+});
+
+describe('anomalies écartées par les analyses', () => {
+  it('un bilan complet dans les normes écarte chaque anomalie biologique dosable', () => {
+    for (const sp of ['chien', 'chat'] as SpeciesId[]) {
+      const mid = Object.fromEntries(Object.entries(RANGES[sp]!).map(([id, r]) => [id, (r![0] + r![1]) / 2]));
+      const rows = interpretLab(sp, lab(mid));
+      expect(deriveFindings(sp, rows), sp).toEqual([]);
+      const absent = new Set(deriveAbsent(sp, rows));
+      // Analytes sans intervalle chez le chien et le chat : rien à conclure
+      const untested = ['gldh_haut', 'agne_haut', 'cetose'];
+      for (const f of Object.keys(LAB_FINDINGS)) if (!untested.includes(f)) expect(absent.has(f), `${sp} → ${f}`).toBe(true);
+    }
+  });
+  it('sans valeur dosée, rien n’est écarté', () => {
+    expect(deriveAbsent('chien', [])).toEqual([]);
   });
 });
 

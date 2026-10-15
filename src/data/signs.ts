@@ -240,6 +240,7 @@ export const LAB_FINDINGS: Record<string, string> = {
   alcalose: 'Alcalose métabolique (HCO₃⁻ ↑)',
   isosthenurie: 'Urines peu concentrées (densité < 1,030 chat / < 1,025 chien)',
   proteinurie: 'Protéinurie (RPCU ↑)',
+  hypertension: 'Hypertension artérielle (PAS ≥ 160 mmHg)',
   na_k_bas: 'Rapport Na/K < 27',
   ag_bas: 'Rapport albumine/globulines < 0,4',
 };

@@ -2,7 +2,7 @@
 // Facteurs : valeur_canonique = valeur_saisie × facteur.
 // Conversions standard (Système international) ; vérifiées sur les tables du Merck Veterinary Manual.
 
-export type AnalyteGroup = 'hemato' | 'biochimie' | 'electrolytes' | 'gaz' | 'endocrino' | 'urine';
+export type AnalyteGroup = 'hemato' | 'biochimie' | 'electrolytes' | 'gaz' | 'endocrino' | 'urine' | 'mesure';
 
 export interface Analyte {
   id: string;
@@ -136,6 +136,10 @@ export const ANALYTES: Analyte[] = [
     units: { '': 1 }, aliases: ['densité urinaire', 'densite urinaire', 'usg', 'densité', 'sg'] },
   { id: 'rpcu', label: 'RPCU', short: 'RPCU', group: 'urine', unit: '', decimals: 2,
     units: { '': 1 }, aliases: ['rpcu', 'upc', 'upcr', 'rapport protéines/créatinine'] },
+
+  // ——— Mesures ———
+  { id: 'pas', label: 'Pression artérielle systolique', short: 'PAS', group: 'mesure', unit: 'mmHg', decimals: 0,
+    units: { 'mmhg': 1, 'kpa': 7.5 }, aliases: ['pression artérielle systolique', 'pression systolique', 'tension artérielle', 'sbp'], exact: ['PAS', 'PA'] },
 ];
 
 export const analyteById = (id: string): Analyte | undefined => ANALYTES.find((a) => a.id === id);

@@ -134,6 +134,9 @@ export function deriveFindings(species: SpeciesId, rows: LabRow[]): string[] {
   if (lo('hco3') || (lo('ph') && !hi('pco2'))) f.add('acidose');
   if (hi('hco3')) f.add('alcalose');
   if (hi('rpcu')) f.add('proteinurie');
+  // ACVIM 2018 : hypertension à partir de 160 mmHg ; 140–159 = préhypertension, sans conclusion
+  const pas = val('pas');
+  if ((species === 'chien' || species === 'chat') && pas != null && pas >= 160) f.add('hypertension');
 
   const du = val('du');
   if (du != null && du > 1 && du < (species === 'chat' ? 1.030 : 1.025)) f.add('isosthenurie');
@@ -146,6 +149,65 @@ export function deriveFindings(species: SpeciesId, rows: LabRow[]): string[] {
   if (alb != null && glob != null && glob > 0 && alb / glob < 0.4) f.add('ag_bas');
 
   return [...f];
+}
+
+/**
+ * Analytes qui recherchent chaque anomalie et sens de l'anomalie.
+ * Une anomalie est écartée quand au moins un de ses analytes est dosé et qu'aucun ne va dans ce sens.
+ */
+const TESTED_BY: Record<string, [string[], 'high' | 'low']> = {
+  anemie: [['ht'], 'low'], polyglobulie: [['ht'], 'high'],
+  leucocytose: [['gb'], 'high'], leucopenie: [['gb'], 'low'],
+  neutrophilie: [['neutro'], 'high'], neutropenie: [['neutro'], 'low'],
+  lymphopenie: [['lympho'], 'low'], lymphocytose: [['lympho'], 'high'],
+  eosinophilie: [['eosino'], 'high'], thrombopenie: [['plaq'], 'low'],
+  inflammation: [['fibri', 'saa'], 'high'],
+  azotemie: [['crea', 'uree'], 'high'], sdma_haut: [['sdma'], 'high'],
+  hyperglycemie: [['glu'], 'high'], hypoglycemie: [['glu'], 'low'],
+  hyperkaliemie: [['k'], 'high'], hypokaliemie: [['k'], 'low'],
+  hyponatremie: [['na'], 'low'], hypernatremie: [['na'], 'high'], hypochloremie: [['cl'], 'low'],
+  hypercalcemie: [['ca', 'cai'], 'high'], hypocalcemie: [['ca', 'cai'], 'low'],
+  hyperphosphatemie: [['p'], 'high'], hypophosphatemie: [['p'], 'low'], hypomagnesemie: [['mg'], 'low'],
+  alat_haut: [['alat'], 'high'], pal_haut: [['pal'], 'high'], ggt_haut: [['ggt'], 'high'],
+  asat_haut: [['asat'], 'high'], gldh_haut: [['gldh'], 'high'], ck_haut: [['ck'], 'high'],
+  hyperbilirubinemie: [['bili'], 'high'], ab_haut: [['ab'], 'high'],
+  hypoalbuminemie: [['alb'], 'low'], hyperglobulinemie: [['glob'], 'high'],
+  hypoproteinemie: [['pt'], 'low'], hyperproteinemie: [['pt'], 'high'],
+  hypercholesterolemie: [['chol'], 'high'], hypertriglyceridemie: [['tg'], 'high'],
+  lipase_haut: [['lipase'], 'high'], lactate_haut: [['lact'], 'high'],
+  cetose: [['bhb'], 'high'], agne_haut: [['agne'], 'high'], fructo_haut: [['fructo'], 'high'],
+  t4_haut: [['t4'], 'high'], t4_bas: [['t4'], 'low'],
+  acidose: [['hco3'], 'low'], alcalose: [['hco3'], 'high'],
+  proteinurie: [['rpcu'], 'high'], hypertension: [['pas'], 'high'],
+};
+
+/** Anomalies calculées : écartées dès que leurs valeurs sont saisies sans qu'elles ressortent */
+const COMPUTED: Record<string, string[][]> = {
+  isosthenurie: [['du']],
+  na_k_bas: [['na', 'k']],
+  ag_bas: [['alb', 'glob'], ['alb', 'pt']],
+};
+
+/**
+ * Anomalies biologiques écartées par des valeurs dosées dans les normes.
+ * Une valeur hors normes dans l'autre sens écarte aussi (glycémie basse : pas d'hyperglycémie) ;
+ * une valeur un peu élevée mais sous le seuil retenu (glycémie de stress du chat) n'écarte rien.
+ */
+export function deriveAbsent(species: SpeciesId, rows: LabRow[]): string[] {
+  const by = new Map(rows.map((r) => [r.analyte.id, r]));
+  const found = new Set(deriveFindings(species, rows));
+  const out: string[] = [];
+  for (const [f, [ids, dir]] of Object.entries(TESTED_BY)) {
+    if (found.has(f)) continue;
+    const measured = ids.map((id) => by.get(id)).filter((r): r is LabRow => !!r && r.status !== 'unknown');
+    if (measured.length && measured.every((r) => r.status !== dir)) out.push(f);
+  }
+  for (const [f, sets] of Object.entries(COMPUTED)) {
+    if (found.has(f)) continue;
+    if (f === 'na_k_bas' && species !== 'chien' && species !== 'chat') continue;
+    if (sets.some((ids) => ids.every((id) => by.get(id)?.value != null))) out.push(f);
+  }
+  return out;
 }
 
 export function formatValue(a: Analyte, v: number): string {

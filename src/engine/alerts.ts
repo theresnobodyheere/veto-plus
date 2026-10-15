@@ -51,6 +51,11 @@ export function computeAlerts(species: SpeciesId, rows: LabRow[], signs: string[
     if (fam === 'carn' && glu >= 25) add('critique', `Hyperglycémie marquée (${fr(glu, 1)} mmol/L)`, 'Rechercher une acidocétose (cétones urinaires / BHB, gaz du sang) ou un état hyperosmolaire.');
   }
 
+  const pas = g('pas');
+  if (fam === 'carn' && pas != null && pas >= 180)
+    add(signs.includes('cecite') || signs.includes('convulsions') ? 'critique' : 'attention', `Hypertension sévère (PAS ${fr(pas, 0)} mmHg)`,
+      'Risque d’atteinte des organes cibles : fond d’œil (décollement rétinien), examen neurologique, fonction rénale. Confirmer par plusieurs mesures au calme ; rechercher la cause (maladie rénale, hyperthyroïdie, Cushing).');
+
   const ca = g('ca'), cai = g('cai');
   if (fam === 'rum' && ca != null) {
     if (ca < 1.5) add('critique', `Hypocalcémie (Ca ${fr(ca, 2)} mmol/L)`, 'Fièvre de lait : calcium IV lent sous auscultation cardiaque (arrêt si arythmie), puis calcium oral/SC.');

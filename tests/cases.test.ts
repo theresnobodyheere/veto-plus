@@ -5,6 +5,7 @@ import { newCase, setAnswer, setMeasure, toggleSign, toggleMotif, setLab, patch,
 import { buildSteps, flatSteps, MOTIFS, answerSigns, motifSuggestions } from '../src/data/wizard';
 import { SIGNS, LAB_FINDINGS } from '../src/data/signs';
 import { DISEASES } from '../src/data/diseases';
+import { discriminants } from '../src/engine/ddx';
 import { TREATMENTS, treatmentFor, lineDose } from '../src/data/treatments';
 import { SPECIES, type SpeciesId } from '../src/data/species';
 
@@ -138,6 +139,54 @@ describe('réponses normales', () => {
     toggleSign('hypothermie');
     setMeasure('temp', 36);
     expect(analysis.value!.absent).not.toContain('hypothermie');
+  });
+});
+
+describe('analyses dans les normes', () => {
+  it('chat âgé en PU-PD : créatinine, SDMA et densité normales font reculer la maladie rénale', () => {
+    const base = run('chat', { motif: 'pupd', age: 'age', signs: ['amaigrissement'] });
+    const s0 = base.ddx.find((r) => r.disease.id === 'irc')!.score;
+    const after = run('chat', { motif: 'pupd', age: 'age', signs: ['amaigrissement'], labs: { crea: 120, sdma: 10, du: 1.045 } });
+    expect(after.absent).toEqual(expect.arrayContaining(['azotemie', 'sdma_haut', 'isosthenurie']));
+    expect(after.ddx.find((r) => r.disease.id === 'irc')?.score ?? 0).toBeLessThan(s0);
+    expect(top(after)).not.toBe('irc');
+  });
+  it('une valeur dans l’autre sens écarte aussi ; une glycémie de stress du chat n’écarte rien', () => {
+    expect(run('chien', { motif: 'abat', labs: { glu: 2.5 } }).absent).toContain('hyperglycemie');
+    const stress = run('chat', { motif: 'abat', labs: { glu: 9 } });
+    expect(stress.findings).not.toContain('hyperglycemie');
+    expect(stress.absent).not.toContain('hyperglycemie');
+  });
+  it('une valeur dosée normale n’est plus proposée « à doser »', () => {
+    const before = run('chat', { motif: 'pupd', age: 'age', signs: ['amaigrissement'] });
+    expect(discriminants('chat', before.ddx, before.findings, 8, before.absent).labs.map((x) => x.id)).toContain('azotemie');
+    const a = run('chat', { motif: 'pupd', age: 'age', signs: ['amaigrissement'], labs: { crea: 120 } });
+    expect(discriminants('chat', a.ddx, a.findings, 8, a.absent).labs.map((x) => x.id)).not.toContain('azotemie');
+  });
+});
+
+describe('pression artérielle', () => {
+  it('chat âgé aveugle, PAS 190 : hypertension en tête et alerte', () => {
+    const a = run('chat', { motif: 'neuro', age: 'age', signs: ['cecite'], labs: { pas: 190 } });
+    expect(a.findings).toContain('hypertension');
+    expect(top(a)).toBe('hypertension');
+    expect(a.alerts.some((x) => x.level === 'critique' && /Hypertension sévère/.test(x.title))).toBe(true);
+  });
+  it('sans mesure, l’hypertension n’est qu’une piste faible et la PAS est proposée', () => {
+    const a = run('chat', { motif: 'neuro', age: 'age', signs: ['cecite'] });
+    const h = a.ddx.find((r) => r.disease.id === 'hypertension');
+    expect(h?.missingKey).toBe(true);
+    expect(discriminants('chat', a.ddx, a.findings, 8, a.absent).labs.map((x) => x.id)).toContain('hypertension');
+  });
+  it('PAS normale : hypertension écartée ; préhypertension (150) : ni l’un ni l’autre', () => {
+    const base = run('chat', { motif: 'neuro', age: 'age', signs: ['cecite'] });
+    const s0 = base.ddx.find((r) => r.disease.id === 'hypertension')?.score ?? 0;
+    const n = run('chat', { motif: 'neuro', age: 'age', signs: ['cecite'], labs: { pas: 125 } });
+    expect(n.absent).toContain('hypertension');
+    expect(n.ddx.find((r) => r.disease.id === 'hypertension')?.score ?? 0).toBeLessThan(s0);
+    const pre = run('chat', { motif: 'neuro', age: 'age', signs: ['cecite'], labs: { pas: 150 } });
+    expect(pre.findings).not.toContain('hypertension');
+    expect(pre.absent).not.toContain('hypertension');
   });
 });
 
