@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseNotes } from '../src/engine/notes';
+import { tempFinding } from '../src/data/vitals';
 
 describe('lecture du commentaire', () => {
   it('chien : poids, âge, sexe, signes et analyses', () => {
@@ -47,8 +48,12 @@ describe('lecture du commentaire', () => {
     expect(f.signs).not.toContain('femelle_entiere');
   });
   it('température et fréquence cardiaque chiffrées selon l’espèce', () => {
-    expect(parseNotes('Chienne entière, chaleurs il y a 1 mois, abattue, T 40,2', 'chien').signs).toEqual(expect.arrayContaining(['fievre', 'femelle_entiere']));
-    expect(parseNotes('vache couchée, a vêlé hier, T° 37,2, ne rumine plus', 'bovin').signs).toEqual(expect.arrayContaining(['hypothermie', 'decubitus', 'mise_bas_recente', 'arret_rumination']));
+    const c = parseNotes('Chienne entière, chaleurs il y a 1 mois, abattue, T 40,2', 'chien');
+    expect(c.temp).toBe(40.2);
+    expect(tempFinding('chien', c.temp)).toBe('fievre');
+    const v = parseNotes('vache couchée, a vêlé hier, T° 37,2, ne rumine plus', 'bovin');
+    expect(tempFinding('bovin', v.temp)).toBe('hypothermie');
+    expect(v.signs).toEqual(expect.arrayContaining(['decubitus', 'mise_bas_recente', 'arret_rumination']));
     const h = parseNotes('jument coliques depuis ce matin, se roule, FC 64, pas de diarrhée', 'cheval');
     expect(h.hr).toBe(64);
     expect(h.signs).toEqual(expect.arrayContaining(['douleur_abdo', 'tachycardie']));
@@ -76,5 +81,15 @@ describe('lecture du commentaire', () => {
     expect(parseNotes('jument trotteur, 8 ans', 'cheval').breed).toBe('Trotteur français');
     expect(parseNotes('chevaux au pré depuis hier', 'cheval').breed).toBeUndefined();
     expect(parseNotes('vomit 3 fois par jour', 'chien').breed).toBeUndefined();
+  });
+
+  it('la température du champ prime sur « fièvre » dicté ou coché', async () => {
+    const { newCase, setNotes, patchManual, analysis, draft } = await import('../src/state/case');
+    newCase('chien');
+    setNotes('abattu, fièvre, T 40,5');
+    expect(draft.value!.temp).toBe(40.5);
+    expect(analysis.value!.findings).toContain('fievre');
+    patchManual({ temp: 38.6 });
+    expect(analysis.value!.findings).not.toContain('fievre');
   });
 });

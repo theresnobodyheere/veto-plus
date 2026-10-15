@@ -23,6 +23,13 @@ const VITALS: Partial<Record<SpeciesId, Vitals>> = {
   porc: { temp: [38.7, 39.8], hr: [70, 120], young: 3 },
 };
 
+/** Fièvre ou hypothermie d'après la température rectale ; rien si normale ou si l'espèce n'a pas de référence */
+export function tempFinding(species: SpeciesId, temp?: number): 'fievre' | 'hypothermie' | undefined {
+  const v = vitalsFor(species);
+  if (!v || temp == null || !Number.isFinite(temp)) return undefined;
+  return temp > v.temp[1] ? 'fievre' : temp < v.temp[0] ? 'hypothermie' : undefined;
+}
+
 /** Valeurs de l'espèce, ou de son espèce de référence pour la faune ; aucune pour le macaque */
 export function vitalsFor(species: SpeciesId): Vitals | undefined {
   return VITALS[species] ?? (speciesById(species).proxy ? VITALS[speciesById(species).proxy!] : undefined);

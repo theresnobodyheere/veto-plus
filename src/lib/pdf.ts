@@ -69,6 +69,7 @@ export async function buildPdf(): Promise<Blob> {
   const rows: [string, string][] = [
     ['Espèce', sp.label], ['Référence', d.ref ?? ''], ['Race', d.breed ?? ''], ['Âge', d.age ?? ''], ['Sexe', d.sex ?? ''],
     ['Poids', d.weight ? `${d.weight.toLocaleString('fr-FR')} kg` : ''],
+    ['Température', d.temp != null ? `${d.temp.toLocaleString('fr-FR')} °C` : ''],
     ['Cas collectif', d.herd && (d.herd.effectif || d.herd.malades || d.herd.morts) ? `effectif ${d.herd.effectif ?? '?'} · malades ${d.herd.malades ?? '?'} · morts ${d.herd.morts ?? '?'}` : ''],
     ['Département', dept ? `${dept.nom} (${dept.code})` : ''],
   ].filter((r): r is [string, string] => !!r[1]);

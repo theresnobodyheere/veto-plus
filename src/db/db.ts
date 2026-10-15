@@ -15,6 +15,8 @@ export interface CaseRecord {
   age?: string;
   sex?: string;
   breed?: string;
+  /** Température rectale (°C) */
+  temp?: number;
   weight?: number;
   herd?: Herd;
   signs: string[];

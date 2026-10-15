@@ -95,11 +95,8 @@ export function parseNotes(text: string, species: SpeciesId): NotesFacts {
   }
   // Mesures et signalement : la valeur chiffrée prime sur les mots
   const v = vitalsFor(species);
-  if (v && facts.temp != null) {
-    signs.delete('fievre'); signs.delete('hypothermie');
-    if (facts.temp > v.temp[1]) signs.add('fievre');
-    else if (facts.temp < v.temp[0]) signs.add('hypothermie');
-  }
+  // Température chiffrée : elle remplit le champ Température, qui décide seul de la fièvre (voir l'analyse)
+  if (facts.temp != null) { signs.delete('fievre'); signs.delete('hypothermie'); }
   if (v && facts.hr != null) {
     if (facts.hr > v.hr[1]) signs.add('tachycardie');
     else if (facts.hr < v.hr[0]) signs.add('bradycardie');

@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'preact/hooks';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { draft, patch, patchManual, setNotes, addPhotos, removePhoto, setPhotoKind, reading, toggleSign, setLab, removeLab, analysis, persist } from '../state/case';
 import { speciesById } from '../data/species';
 import { ANALYTES, analyteById, toCanonical } from '../data/analytes';
@@ -7,6 +7,7 @@ import { formatValue } from '../engine/interpret';
 import { searchSigns, signsForSpecies } from '../engine/textSigns';
 import { parseNotes } from '../engine/notes';
 import { breedsFor } from '../data/breeds';
+import { tempFinding } from '../data/vitals';
 import { TopBar } from '../components/ui';
 import { Icon } from '../components/Icon';
 import { go } from '../lib/router';
@@ -56,18 +57,36 @@ function Signalement() {
   const sp = speciesById(d.species);
   const herd = d.herd != null;
   const num = (v: string) => parseFloat(v.replace(',', '.'));
+  // Liste triée pour la roue de sélection ; « Croisé » pour les chiens de race indéterminée
+  const breeds = useMemo(() => {
+    const names = breedsFor(d.species).map((b) => b.name).sort((a, b) => a.localeCompare(b, 'fr'));
+    return d.species === 'chien' ? [...names, 'Croisé'] : names;
+  }, [d.species]);
+  // Texte saisi gardé tel quel (« 38, » en cours de frappe), resynchronisé quand le commentaire remplit le champ
+  const fmt = (n?: number) => (n == null ? '' : String(n).replace('.', ','));
+  const [tempText, setTempText] = useState(fmt(d.temp));
+  useEffect(() => { if (num(tempText) !== d.temp) setTempText(fmt(d.temp)); }, [d.temp]);
+  const tf = tempFinding(d.species, d.temp);
   return (
     <section>
       <div class="section-title">Animal</div>
       <div class="list form">
         <label class="form-row"><span class="form-label">Référence</span>
           <input class="wide" type="text" name="reference-animal" autoComplete="off" autoCorrect="off" value={d.ref ?? ''} placeholder={sp.group === 'rurale' ? 'Élevage, n° animal' : 'Facultatif'} onInput={(e) => patch({ ref: e.currentTarget.value })} /></label>
-        <label class="form-row"><span class="form-label">Race</span>
-          <input class="wide" type="text" list="races" autoComplete="off" value={d.breed ?? ''} placeholder={breedsFor(d.species).length ? 'Choisir ou saisir' : 'Facultatif'}
-            onInput={(e) => patchManual({ breed: e.currentTarget.value || undefined })} /></label>
-        <datalist id="races">{breedsFor(d.species).map((b) => <option key={b.name} value={b.name} />)}</datalist>
+        {(breeds.length > 0 || d.breed) && (
+          <label class="form-row"><span class="form-label">Race</span>
+            <select value={d.breed ?? ''} onChange={(e) => patchManual({ breed: e.currentTarget.value || undefined })}>
+              <option value="">Non précisée</option>
+              {d.breed && !breeds.includes(d.breed) && <option>{d.breed}</option>}
+              {breeds.map((b) => <option key={b}>{b}</option>)}
+            </select></label>
+        )}
         <label class="form-row"><span class="form-label">Poids</span>
           <input type="text" inputMode="decimal" value={d.weight ?? ''} placeholder="—" onInput={(e) => patchManual({ weight: num(e.currentTarget.value) || undefined })} /><span class="form-unit">kg</span></label>
+        <label class="form-row"><span class="form-label">Température{tf && <span class="tag crit" style="margin-left:8px">{tf === 'fievre' ? 'fièvre' : 'hypothermie'}</span>}</span>
+          <input type="text" inputMode="decimal" value={tempText} placeholder="—"
+            onInput={(e) => { setTempText(e.currentTarget.value); const n = num(e.currentTarget.value); patchManual({ temp: Number.isFinite(n) ? n : undefined }); }} />
+          <span class="form-unit">°C</span></label>
         <label class="form-row"><span class="form-label">Âge</span>
           <input class="wide" type="text" value={d.age ?? ''} placeholder="ex. 8 ans, 3 sem." onInput={(e) => patchManual({ age: e.currentTarget.value })} /></label>
         <label class="form-row"><span class="form-label">Sexe</span>
@@ -265,7 +284,7 @@ function Notes() {
   const vitals = useMemo(() => parseNotes(d.notes, d.species), [d.notes, d.species]);
   // Ce qui a été repris du texte, pour que le vétérinaire voie ce qui a été rempli
   const filled = auto ? [
-    vitals.temp != null && `T ${String(vitals.temp).replace('.', ',')} °C`,
+    auto.temp && d.temp != null && `T ${String(d.temp).replace('.', ',')} °C`,
     vitals.hr != null && `FC ${vitals.hr}/min`,
     auto.weight && d.weight != null && `poids ${d.weight} kg`,
     auto.age && d.age && `âge ${d.age}`,

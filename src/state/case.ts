@@ -12,6 +12,7 @@ import { parseLabText } from '../ocr/parse';
 import { parseNotes } from '../engine/notes';
 import { compressImage } from '../lib/image';
 import { breedByName } from '../data/breeds';
+import { tempFinding } from '../data/vitals';
 
 /** kind « auto » : photo pas encore triée (la lecture décide s'il s'agit d'analyses) */
 export interface Photo { blob: Blob; url: string; kind: 'analyse' | 'clinique' | 'auto'; read?: boolean }
@@ -24,7 +25,7 @@ export interface Draft extends Omit<CaseRecord, 'photos'> {
   dismissed?: string[];
 }
 
-export interface AutoFilled { weight?: boolean; age?: boolean; sex?: boolean; breed?: boolean; herd?: boolean; signs: string[]; labs: string[] }
+export interface AutoFilled { weight?: boolean; age?: boolean; sex?: boolean; breed?: boolean; temp?: boolean; herd?: boolean; signs: string[]; labs: string[] }
 
 export const draft = signal<Draft | null>(null);
 
@@ -56,7 +57,7 @@ export function toggleSign(id: string) {
 }
 
 /** Saisie à la main d'un champ du signalement : il ne suit plus le commentaire */
-export function patchManual(p: Partial<Pick<Draft, 'weight' | 'age' | 'sex' | 'breed' | 'herd'>>) {
+export function patchManual(p: Partial<Pick<Draft, 'weight' | 'age' | 'sex' | 'breed' | 'temp' | 'herd'>>) {
   const d = draft.value;
   if (!d) return;
   const auto = { ...(d.auto ?? { signs: [], labs: [] }) };
@@ -74,7 +75,7 @@ export function setNotes(notes: string) {
   const next: Partial<Draft> = { notes };
 
   // Signalement : rempli si vide, ou s'il venait déjà du texte
-  for (const k of ['weight', 'age', 'sex', 'breed'] as const) {
+  for (const k of ['weight', 'age', 'sex', 'breed', 'temp'] as const) {
     if (d[k] == null || d[k] === '' || prev[k]) {
       (next as any)[k] = f[k];
       auto[k] = f[k] != null;
@@ -123,7 +124,10 @@ export const analysis = computed(() => {
   const labFindings = deriveFindings(d.species, rows);
   // La race renseigne le gabarit (chien de grande race à thorax profond)
   const breedFindings = breedByName(d.species, d.breed)?.large ? ['grand_chien'] : [];
-  const findings = [...new Set([...d.signs, ...labFindings, ...breedFindings])];
+  // Température mesurée : elle prime sur « fièvre » / « hypothermie » cochés ou dictés
+  const signs = d.temp != null ? d.signs.filter((s) => s !== 'fievre' && s !== 'hypothermie') : d.signs;
+  const t = tempFinding(d.species, d.temp);
+  const findings = [...new Set([...signs, ...labFindings, ...breedFindings, ...(t ? [t] : [])])];
   return {
     rows,
     labFindings,
