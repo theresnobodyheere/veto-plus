@@ -6,7 +6,7 @@ Conçue pour un exercice mixte : canine, bovins, ovins, caprins, équins, porcin
 ## Fonctions
 
 - **Saisie du cas en questions successives** : motif, âge, sexe et stade, température, signes, questions ciblées, examen, race, poids. Un choix fait passer à la suite, les valeurs normales de l’espèce sont affichées, l’hypothèse en tête s’affiche en direct
-- Compte rendu d’analyses scanné avec « Analyser le texte » de l’iPhone (texte en direct d’iOS, hors ligne) ou collé → valeurs et intervalles
+- Saisie des valeurs d’analyses, avec conversion d’unités
 - Interprétation, intervalles par espèce, conversions d’unités
 - **Alertes vitales** (K⁺, glycémie, Ca, Mg, lactates, Ht, BHB…)
 - Diagnostic différentiel classé (≈ 110 maladies, sources citées), avec un avertissement quand les éléments sont insuffisants et les **signes à rechercher** pour départager les hypothèses (un toucher les ajoute et met à jour le classement)
@@ -40,7 +40,7 @@ Les mises à jour sont proposées par un bandeau « Nouvelle version disponible 
 
 ## À faire valider par le vétérinaire
 
-- **Intervalles de référence** : Réglages → Intervalles de la clinique, pour les adapter aux automates de la clinique. L’intervalle imprimé sur un compte rendu reste toujours prioritaire.
+- **Intervalles de référence** : Réglages → Intervalles de la clinique, pour les adapter aux automates de la clinique. 
 - **Contacts** : dans Réglages, saisir les numéros de la DDETSPP, du GDS et du laboratoire départemental. Ils restent sur l’iPhone.
 - Relire la base de maladies (`src/data/diseases.ts`), les seuils d’alerte (`src/engine/alerts.ts`) et les protocoles et posologies (`src/data/treatments.ts`).
 
@@ -54,7 +54,7 @@ npm run build        # version de production dans dist/
 npm run data:anmv    # retélécharge la base ANMV (nécessite 7z)
 ```
 
-Structure : `src/data` (espèces, analytes, intervalles, signes, maladies, réglementation, faune), `src/data/wizard.ts` (étapes du parcours), `src/data/treatments.ts` (conduite à tenir), `src/engine` (interprétation, lecture des comptes rendus, alertes, diagnostic différentiel, calculs), `src/screens` (écrans). Les cas de référence (`tests/cases.test.ts`) bloquent la publication en cas de régression.
+Structure : `src/data` (espèces, analytes, intervalles, signes, maladies, réglementation, faune), `src/data/wizard.ts` (étapes du parcours), `src/data/treatments.ts` (conduite à tenir), `src/engine` (interprétation, alertes, diagnostic différentiel, calculs), `src/screens` (écrans). Les cas de référence (`tests/cases.test.ts`) bloquent la publication en cas de régression.
 
 ## Sources
 

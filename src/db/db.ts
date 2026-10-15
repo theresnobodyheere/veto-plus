@@ -33,7 +33,7 @@ export interface CaseRecord {
   /** Commentaire libre des cas enregistrés par les versions précédentes */
   notes: string;
   labs: LabValue[];
-  /** Texte du compte rendu d'analyses (scanné avec l'iPhone ou collé) */
+  /** Texte de compte rendu des cas enregistrés par les versions précédentes */
   otherResults?: string;
   /** Photos des cas enregistrés par les versions précédentes (conservées à l'export) */
   photos?: Blob[];

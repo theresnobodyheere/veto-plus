@@ -15,13 +15,13 @@ Testeur : ……………………… Date : ……/……/…… Version (Régl
 
 Un cas se saisit en questions successives : animal, motif, âge, sexe et stade, température, signes, puis 2 ou 3 questions ciblées choisies d’après les hypothèses en tête, examen (FC, FR, muqueuses, hydratation), race, poids, analyses. Un choix fait passer à la question suivante ; « Passer » saute une question. Les valeurs normales de l’espèce sont affichées à chaque mesure. Dès qu’il y a assez de réponses, le bouton **Analyser** se débloque et l’hypothèse en tête s’affiche en bas de l’écran. Tout est calculé sur l’iPhone : rien n’est envoyé sur Internet.
 
-Pour un compte rendu d’analyses : à l’étape Analyses, touchez le champ de texte puis **Analyser le texte** (icône scanner au-dessus du clavier ou dans le menu du champ), et visez le compte rendu. Si l’icône n’apparaît pas : Réglages de l’iPhone → Général → Langue et région → Texte en direct.
+Les valeurs d’analyses se saisissent à la main à l’étape Analyses (« Saisir une valeur »), avec l’unité au choix.
 
 ## 3. Cinq scénarios à tester
 
 | # | Scénario | À faire | Points à vérifier |
 |---|---|---|---|
-| 1 | **Bilan IDEXX de la clinique** | Cas → Chien → motif « J’ai un bilan sanguin » → Analyser le texte sur un vrai compte rendu, bien à plat | Toutes les valeurs lues ? Unités correctes ? Intervalles du compte rendu repris ? Valeurs hors normes en couleur ? |
+| 1 | **Bilan sanguin de la clinique** | Cas → Chien → motif « J’ai un bilan sanguin » → saisir urée, créatinine, K⁺, glycémie d’un vrai bilan | Saisie rapide ? Unités proposées correctes ? Valeurs hors normes en couleur ? Alertes justes ? |
 | 2 | **Vache couchée après vêlage** | Cas → Bovin → « Couché(e), ne se relève pas » → Femelle → Mise bas < 2 semaines → Hypothermie ; calcémie, Mg, P, BHB si disponibles | Fièvre de lait en tête ? Alerte vitale si Ca très bas ? Conduite à tenir (calcium IV) correcte ? Temps d’attente rappelés ? |
 | 3 | **Chienne qui boit beaucoup** | Cas → Chien → « Boit et urine beaucoup » → Âgé → Femelle entière → Chaleurs < 2 mois → répondre aux questions ciblées ; poids 28 kg | Pyomètre en tête ? Questions ciblées pertinentes ? Doses calculées justes (aglépristone, amoxicilline) ? |
 | 4 | **Colique de cheval** | Cas → Équidé → Colique → FC « Tachycardie marquée », muqueuses congestives, lactates si disponibles | Colique chirurgicale en tête ? Conduite à tenir (référer, flunixine, xylazine) et doses pour 500 kg justes ? |

@@ -2,7 +2,7 @@
 // l'analyse se débloque dès qu'il y a assez de réponses et l'hypothèse en tête s'affiche en direct.
 import { useEffect, useMemo, useState } from 'preact/hooks';
 import {
-  draft, step, patch, setAnswer, setMeasure, freezeQuestions, toggleSign, toggleMotif, setReport, setLab, removeLab,
+  draft, step, patch, setAnswer, setMeasure, freezeQuestions, toggleSign, toggleMotif, setLab, removeLab,
   analysis, persist, canAnalyse,
 } from '../state/case';
 import { speciesById } from '../data/species';
@@ -316,58 +316,13 @@ function AnalyseBar({ onAnalyse, action }: { onAnalyse: () => void; action?: Nex
   );
 }
 
-/**
- * Photo du compte rendu (prise ou importée) : affichée dans la page, son texte se sélectionne avec la lecture de l'iPhone
- * (Texte en direct), puis se colle en un toucher. La photo n'est pas enregistrée avec le cas (nom du propriétaire possible).
- */
-function ReportPhoto() {
-  const [url, setUrl] = useState<string | null>(null);
-  const [msg, setMsg] = useState('');
-  useEffect(() => () => { if (url) URL.revokeObjectURL(url); }, [url]);
-  const choose = (f?: File) => { if (!f) return; setUrl(URL.createObjectURL(f)); setMsg(''); };
-  const paste = async () => {
-    try {
-      const text = (await navigator.clipboard.readText()).trim();
-      if (!text) { setMsg('Rien à coller : sélectionnez d’abord le texte de la photo, puis Copier.'); return; }
-      const cur = draft.value?.otherResults?.trim();
-      setReport(cur ? `${cur}\n${text}` : text);
-      setMsg('');
-    } catch {
-      setMsg('Collage refusé : touchez le champ de texte ci-dessous, puis Coller.');
-    }
-  };
-  return (
-    <div class="report-photo">
-      <label class="btn primary block">
-        <Icon name="camera" />{url ? 'Autre photo' : 'Photo du compte rendu'}
-        <input type="file" accept="image/*" hidden onChange={(e) => { choose(e.currentTarget.files?.[0]); e.currentTarget.value = ''; }} />
-      </label>
-      {url ? (
-        <>
-          <Norms>
-            <b>Appuyez longuement</b> sur le texte de la photo, puis <b>Tout sélectionner</b> et <b>Copier</b>.
-            Touchez ensuite <b>Coller le texte copié</b> : les valeurs et leurs intervalles sont repris.
-          </Norms>
-          <img class="report-img" src={url} alt="Compte rendu d’analyses" />
-          <button class="btn block" onClick={paste}><Icon name="doc" />Coller le texte copié</button>
-          {msg && <p class="fine crit-text">{msg}</p>}
-        </>
-      ) : (
-        <p class="fine">Prendre une photo ou en choisir une. La lecture se fait sur l’iPhone, sans réseau ; la photo n’est pas enregistrée.</p>
-      )}
-    </div>
-  );
-}
-
 function LabEditor() {
-  const d = draft.value!;
   const rows = analysis.value!.rows;
   const [adding, setAdding] = useState(false);
   const [aid, setAid] = useState('');
   const [val, setVal] = useState('');
   const [unit, setUnit] = useState('');
   const sel = analyteById(aid);
-  const fromReport = d.labs.filter((l) => l.source === 'ocr').length;
 
   const add = () => {
     const n = parseFloat(val.replace(',', '.'));
@@ -379,17 +334,7 @@ function LabEditor() {
 
   return (
     <section>
-      <ReportPhoto />
-      <div class="card" style="margin-top:10px">
-        <textarea class="report" name="compte-rendu" autoCorrect="off" spellcheck={false}
-          placeholder="Texte du compte rendu : collez-le ici"
-          value={d.otherResults ?? ''} onInput={(e) => setReport(e.currentTarget.value)} />
-        {!!d.otherResults?.trim() && (
-          <p class={`fine row ${fromReport ? '' : 'crit-text'}`} style="margin:8px 0 4px;gap:6px">
-            {fromReport ? <><Icon name="check" size={16} />{fromReport} valeur{fromReport > 1 ? 's' : ''} lue{fromReport > 1 ? 's' : ''} sur le compte rendu — vérifiez-les.</>
-              : 'Aucune valeur reconnue : vérifiez le texte ou saisissez les valeurs.'}
-          </p>
-        )}
+      <div class="card">
         {rows.length > 0 && (
           <table class="lab">
             <tbody>

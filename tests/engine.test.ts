@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { interpretLab, deriveFindings, type LabValue } from '../src/engine/interpret';
 import { computeAlerts } from '../src/engine/alerts';
 import { rankDiseases, likelihood, confidence, discriminants, strength } from '../src/engine/ddx';
-import { parseLabText } from '../src/engine/labText';
 import { normalizeUnit, ANALYTES } from '../src/data/analytes';
 import { DISEASES } from '../src/data/diseases';
 import { SIGNS, LAB_FINDINGS } from '../src/data/signs';
@@ -81,49 +80,6 @@ describe('cas cliniques', () => {
   });
 });
 
-describe('lecture OCR', () => {
-  const text = `IDEXX Catalyst One  Résultats
-CREA 4.0 mg/dL 0.5 - 1.8 H
-BUN 80 mg/dL 7 - 27
-GLU 110 mg/dL 74 - 143
-ALKP 450 U/L 23 - 212 H
-Ca 9,5
-K+ 7.2 mmol/L
-Na 140 mmol/L
-Neutrophiles 75 % 9,5 10^9/L
-Hématocrite 0,35 L/L
-Page 1 / 2`;
-  const out = parseLabText(text, 'chien');
-  const get = (id: string) => out.find((v) => v.analyte === id);
-
-  it('convertit mg/dL en SI', () => {
-    expect(get('crea')!.value).toBeCloseTo(353.6, 0);
-    expect(get('uree')!.value).toBeCloseTo(28.56, 1); // BUN
-    expect(get('glu')!.value).toBeCloseTo(6.1, 1);
-  });
-  it("lit l'intervalle imprimé", () => {
-    expect(get('crea')!.reportRange![1]).toBeCloseTo(159.1, 0);
-  });
-  it("devine l'unité manquante", () => {
-    expect(get('ca')!.value).toBeCloseTo(2.37, 1);
-    expect(get('ca')!.unitGuessed).toBe(true);
-  });
-  it('ignore les pourcentages du différentiel', () => {
-    expect(get('neutro')!.value).toBeCloseTo(9.5, 2);
-  });
-  it('hématocrite en L/L', () => {
-    expect(get('ht')!.value).toBeCloseTo(35, 0);
-  });
-  it('électrolytes courts', () => {
-    expect(get('k')!.value).toBe(7.2);
-    expect(get('na')!.value).toBe(140);
-    expect(get('pal')!.value).toBe(450);
-  });
-  it('ne lit pas de faux positifs', () => {
-    expect(get('p')).toBeUndefined();
-  });
-});
-
 describe('unités', () => {
   it('normalise les notations courantes', () => {
     expect(normalizeUnit('umol/L')).toBe('µmol/l');
@@ -151,18 +107,6 @@ describe('calculateurs', () => {
     const b = bicarbonate(45, calfBaseDeficit('lateral', true), 0.6);
     expect(b.mmol).toBe(540);
     expect(b.grams).toBeCloseTo(45.4, 1);
-  });
-});
-
-describe('OCR réel (Tesseract)', () => {
-  it('texte lu sur une capture IDEXX', () => {
-    const text = 'GLU 7.9 mmol/L 4.11 -7.95\nCREA 312 umol/L 44-159 H\nBUN 24.1 mmol/L  25-9.6 H\nALT 88 uL 10-125\nALKP 150 uL 23-212\nCl 112 mmol/L 109-122';
-    const v = parseLabText(text, 'chien');
-    const alt = v.find((x) => x.analyte === 'alat')!;
-    expect(alt.unitGuessed).toBe(false);
-    expect(alt.value).toBe(88);
-    expect(v.find((x) => x.analyte === 'uree')!.reportRange).toBeUndefined(); // intervalle illisible rejeté
-    expect(v).toHaveLength(6);
   });
 });
 

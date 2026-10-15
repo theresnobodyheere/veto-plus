@@ -48,7 +48,7 @@ export function family(species: SpeciesId): Family {
   return 'carn';
 }
 
-const BILAN: Motif = { id: 'bilan', label: 'J’ai un bilan sanguin', detail: 'Scanner le compte rendu d’abord', sugg: [] };
+const BILAN: Motif = { id: 'bilan', label: 'J’ai un bilan sanguin', detail: 'Saisir les valeurs d’abord', sugg: [] };
 
 export const MOTIFS: Record<Family, Motif[]> = {
   carn: [
@@ -273,7 +273,7 @@ export function buildSteps(c: WizardCase): Step[] {
   steps.push({ id: 'motif', kind: 'motifs', name: 'Motif', title: 'Motifs de consultation', sub: 'Plusieurs choix possibles, puis Suivant.',
     options: motifsFor(c.species).map((m) => ({ id: m.id, label: m.label, detail: m.detail })) });
   const bilan = motifsOf(c).includes('bilan');
-  if (bilan) steps.push({ id: 'labs', kind: 'labs', name: 'Analyses', title: 'Compte rendu d’analyses' });
+  if (bilan) steps.push({ id: 'labs', kind: 'labs', name: 'Analyses', title: 'Valeurs d’analyses' });
   if (f !== 'carn' || sp.group === 'faune') steps.push({ id: 'herd', kind: 'choice', name: 'Effectif', title: 'Un ou plusieurs animaux ?', options: HERD });
   steps.push({ id: 'age', kind: 'choice', name: 'Âge', title: 'Âge', norms: v?.senior ? `Considéré comme âgé à partir de ${v.senior} ans.` : undefined, options: ageOptions(c.species) });
   steps.push({ id: 'sex', kind: 'choice', name: 'Sexe', title: 'Sexe', options: sexOptions(c.species) });

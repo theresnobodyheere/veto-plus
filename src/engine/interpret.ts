@@ -1,6 +1,6 @@
 // Interprétation des valeurs biologiques : comparaison aux intervalles, conversion d'unités,
 // déduction des anomalies utilisées par le diagnostic différentiel.
-import { ANALYTES, analyteById, normalizeUnit, toCanonical, type Analyte } from '../data/analytes';
+import { ANALYTES, analyteById, type Analyte } from '../data/analytes';
 import { RANGES, RANGE_NOTES, RANGE_SOURCES, type Range, type RangeTable } from '../data/ranges';
 import { speciesById, type SpeciesId } from '../data/species';
 
@@ -146,33 +146,6 @@ export function deriveFindings(species: SpeciesId, rows: LabRow[]): string[] {
   if (alb != null && glob != null && glob > 0 && alb / glob < 0.4) f.add('ag_bas');
 
   return [...f];
-}
-
-/**
- * Convertit une valeur lue (photo, texte) en unité canonique.
- * Si l'unité est absente ou inconnue, on choisit l'unité qui place la valeur
- * le plus près de l'intervalle de référence de l'espèce.
- */
-export function readValue(analyteId: string, value: number, unit: string | undefined, species: SpeciesId, alias?: string): { value: number; guessed: boolean } | null {
-  const a = analyteById(analyteId);
-  if (!a || !Number.isFinite(value)) return null;
-  if (unit && normalizeUnit(unit) !== '') {
-    const c = toCanonical(a, value, unit, alias);
-    if (c != null) return { value: c, guessed: false };
-  }
-  const factors = new Set<number>(Object.values({ ...a.units, ...(alias ? a.aliasUnits?.[alias.toLowerCase()] : {}) }));
-  if (factors.size <= 1) return { value: value * ([...factors][0] ?? 1), guessed: false };
-  const { range } = rangeFor(species, a.id);
-  if (!range) return { value, guessed: true };
-  const mid = Math.sqrt(Math.max(range[0], range[1] * 0.05) * range[1]);
-  let best = value, bestD = Infinity;
-  for (const fct of factors) {
-    const c = value * fct;
-    if (c <= 0) continue;
-    const d = Math.abs(Math.log(c / mid));
-    if (d < bestD) { bestD = d; best = c; }
-  }
-  return { value: best, guessed: true };
 }
 
 export function formatValue(a: Analyte, v: number): string {

@@ -1,4 +1,4 @@
-// Cas en cours : réponses du parcours, compte rendu d'analyses et analyse locale.
+// Cas en cours : réponses du parcours, valeurs d'analyses et analyse locale.
 import { signal, computed } from '@preact/signals';
 import type { CaseRecord } from '../db/db';
 import { saveCase } from '../db/db';
@@ -7,7 +7,6 @@ import { interpretLab, deriveFindings, type LabValue } from '../engine/interpret
 import { computeAlerts } from '../engine/alerts';
 import { rankDiseases, discriminants } from '../engine/ddx';
 import { settings } from './settings';
-import { parseLabText } from '../engine/labText';
 import { breedByName } from '../data/breeds';
 import { tempFinding, hrFinding, rrFinding } from '../data/vitals';
 import { buildSteps, answerSigns, motifsOf, SEX_LABEL } from '../data/wizard';
@@ -140,25 +139,6 @@ export const canAnalyse = computed(() => {
   const a = analysis.value;
   return !!d && !!a && (motifsOf(d).length > 0 || d.labs.length > 0) && answeredCount.value >= MIN_ANSWERS && a.findings.length >= 2;
 });
-
-// ——— Compte rendu d'analyses (scanné avec « Analyser le texte » d'iOS, ou collé) ———
-
-/** Fusionne des valeurs lues sans écraser les saisies manuelles */
-function mergeLabs(values: LabValue[]) {
-  const d = draft.value!;
-  const manual = new Set(d.labs.filter((l) => l.source === 'manuel').map((l) => l.analyte));
-  // Les valeurs d'une lecture précédente du compte rendu sont remplacées par la nouvelle lecture
-  const keep = d.labs.filter((l) => manual.has(l.analyte) || (l.source !== 'ocr' && !values.some((v) => v.analyte === l.analyte)));
-  patch({ labs: [...keep, ...values.filter((v) => !manual.has(v.analyte))] });
-}
-
-/** Met à jour le texte du compte rendu et en reprend les valeurs */
-export function setReport(text: string) {
-  const d = draft.value;
-  if (!d) return;
-  patch({ otherResults: text });
-  mergeLabs(parseLabText(text, d.species).map(({ line: _l, alias: _a, ...v }) => v));
-}
 
 // ——— Enregistrement ———
 
