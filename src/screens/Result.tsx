@@ -119,6 +119,10 @@ export function Result() {
           </>
         )}
 
+        <button class="btn primary block" style="margin-top:24px" onClick={() => { draft.value = null; go('/'); }}>
+          <Icon name="plus" />Nouveau cas
+        </button>
+
         <p class="disclaimer">
           Aide à la décision : ne remplace pas l’examen clinique ni le jugement du vétérinaire. Vérifier toute posologie dans le RCP (ANMV).
         </p>
