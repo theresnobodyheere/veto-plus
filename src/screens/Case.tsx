@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'preact/hooks';
 import {
   draft, step, patch, setAnswer, setMeasure, freezeQuestions, toggleSign, toggleMotif, setReport, setLab, removeLab,
-  analysis, persist, canAnalyse, answeredCount, MIN_ANSWERS,
+  analysis, persist, canAnalyse,
 } from '../state/case';
 import { speciesById } from '../data/species';
 import { ANALYTES, analyteById, toCanonical } from '../data/analytes';
@@ -289,28 +289,23 @@ function Recap({ steps, current, onJump, species }: { steps: Step[]; current: nu
   );
 }
 
-/** Barre du bas : hypothèse en tête et bouton Analyser, débloqué dès qu'il y a assez de réponses */
+/** Barre du bas : n'apparaît qu'avec assez de réponses (hypothèse en tête et bouton Analyser), ou pour une alerte vitale */
 function AnalyseBar({ onAnalyse }: { onAnalyse: () => void }) {
-  const d = draft.value!;
   const a = analysis.value!;
   const ok = canAnalyse.value;
   const top = a.ddx[0];
   const critical = a.alerts.some((x) => x.level === 'critique');
-  const left = Math.max(1, MIN_ANSWERS - answeredCount.value);
-  let lead;
-  if (ok && top) {
-    const lk = likelihood(top, top.score);
-    lead = <><span class="grow">En tête : <b>{top.disease.name}</b></span><span class={`lk-${lk}`}>{lk}</span></>;
-  } else if (!motifsOf(d).length && !d.labs.length) lead = <span>Choisissez le motif de consultation</span>;
-  else if (answeredCount.value >= MIN_ANSWERS) lead = <span>Ajoutez au moins un signe pour analyser</span>;
-  else lead = <span>Encore {left} réponse{left > 1 ? 's' : ''} pour analyser</span>;
+  if (!ok && !critical) return null;
+  const lk = top && likelihood(top, top.score);
   return (
     <div class="wiz-bar">
       {critical && <div class="wiz-alert"><Icon name="warning" size={16} />Alerte vitale : voir le résultat</div>}
-      <div class="wiz-lead">{lead}</div>
-      <button class="btn primary block" disabled={!ok} onClick={onAnalyse}>
-        Analyser{ok ? ` · ${a.findings.length} élément${a.findings.length > 1 ? 's' : ''}` : ''}
-      </button>
+      {ok && top && <div class="wiz-lead"><span class="grow">En tête : <b>{top.disease.name}</b></span><span class={`lk-${lk}`}>{lk}</span></div>}
+      {ok && (
+        <button class="btn primary block" onClick={onAnalyse}>
+          Analyser · {a.findings.length} élément{a.findings.length > 1 ? 's' : ''}
+        </button>
+      )}
     </div>
   );
 }
