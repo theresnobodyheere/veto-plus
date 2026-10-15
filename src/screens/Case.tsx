@@ -10,6 +10,7 @@ import { ANALYTES, analyteById, toCanonical } from '../data/analytes';
 import { SIGN_GROUPS, signLabel, type SignGroup } from '../data/signs';
 import { breedsFor } from '../data/breeds';
 import { buildSteps, motifsOf, selectedMotifs, motifSuggestions, answerLabel, type Step, type Option } from '../data/wizard';
+import { vitalsFor } from '../data/vitals';
 import { formatValue } from '../engine/interpret';
 import { likelihood } from '../engine/ddx';
 import { searchSigns, signsForSpecies, detectSigns } from '../engine/textSigns';
@@ -43,6 +44,7 @@ export function Case() {
   const action: NextAction | undefined =
     s.kind === 'motifs' ? { label: `Suivant · ${nMotifs} motif${nMotifs > 1 ? 's' : ''}`, hidden: !nMotifs, onClick: next }
     : s.kind === 'signs' ? { label: d.signs.length ? `Suivant · ${d.signs.length} signe${d.signs.length > 1 ? 's' : ''}` : 'Aucun autre signe', onClick: next }
+    : s.kind === 'exam' ? { label: examLabel(s, d.answers), onClick: next }
     : s.kind === 'labs' ? (last ? { label: 'Voir le résultat', onClick: () => void finish(), final: true } : { label: 'Continuer', onClick: next })
     : undefined;
 
@@ -128,6 +130,7 @@ function StepView({ s, pick, next }: { s: Step; pick: (id: string, a: string) =>
     );
   }
 
+  if (s.kind === 'exam') return <ExamStep s={s} head={head} />;
   if (s.kind === 'signs') return <SignsStep head={head} />;
   if (s.kind === 'breed') return <BreedStep head={head} next={next} />;
 
@@ -155,6 +158,70 @@ function StepView({ s, pick, next }: { s: Step; pick: (id: string, a: string) =>
         </>
       )}
     </>
+  );
+}
+
+const examined = (s: Step, answers?: Record<string, string>) => (s.rows ?? []).filter((r) => answers?.[r.id]).length;
+function examLabel(s: Step, answers?: Record<string, string>) {
+  const n = examined(s, answers);
+  return n ? `Suivant · ${n} élément${n > 1 ? 's' : ''} examiné${n > 1 ? 's' : ''}` : 'Non examiné';
+}
+
+/** Examen général : une rangée par élément ; un second toucher sur la réponse l'efface (non examiné) */
+function ExamStep({ s, head }: { s: Step; head: preact.ComponentChildren }) {
+  const d = draft.value!;
+  return (
+    <>
+      {head}
+      <div class="exam">
+        {s.rows!.map((r) => {
+          const ans = d.answers?.[r.id];
+          // La précision de la réponse choisie remplace les valeurs usuelles, sur la même ligne (pas de saut de mise en page)
+          const chosen = r.options!.find((o) => o.id === ans);
+          const note = chosen?.detail ? `${chosen.label} : ${chosen.detail}` : r.norms;
+          return (
+            <div class="exam-row" key={r.id}>
+              <div class="exam-head">
+                <span class="exam-name">{r.title}</span>
+                {note && <span class="exam-norm">{note}</span>}
+              </div>
+              <div class="exam-opts">
+                {r.options!.map((o) => (
+                  <button key={o.id} class={`seg ${ans === o.id ? 'sel' : ''} ${o.normal ? 'normal' : ''} ${o.abnormal ? 'bad' : ''}`}
+                    aria-pressed={ans === o.id} title={o.detail} onClick={() => setAnswer(r.id, ans === o.id ? undefined : o.id)}>
+                    {o.label}
+                  </button>
+                ))}
+                {r.kind === 'measure' && <MiniNumber kind={r.measure!} unit={r.unit!} />}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </>
+  );
+}
+
+/** Valeur mesurée dans une rangée de l'examen, enregistrée en quittant le champ ; vide = effacée */
+function MiniNumber({ kind, unit }: { kind: 'temp' | 'hr' | 'rr'; unit: string }) {
+  const d = draft.value!;
+  const shown = d[kind] != null ? String(d[kind]).replace('.', ',') : '';
+  const [text, setText] = useState(shown);
+  useEffect(() => setText(shown), [shown]);
+  const commit = () => {
+    const n = parseFloat(text.replace(',', '.'));
+    if (Number.isFinite(n) && n > 0) { if (n !== d[kind]) setMeasure(kind, n); }
+    else if (!text.trim() && d[kind] != null) setMeasure(kind, undefined);
+  };
+  const v = vitalsFor(d.species);
+  const out = v && d[kind] != null && (d[kind]! > v[kind][1] || (kind !== 'rr' && d[kind]! < v[kind][0]));
+  return (
+    <label class={`seg-input ${d[kind] != null ? 'sel' : ''} ${out ? 'bad' : ''}`}>
+      <input type="text" inputMode="decimal" enterKeyHint="done" placeholder="valeur" value={text}
+        aria-label={`Valeur mesurée (${unit})`} onInput={(e) => setText(e.currentTarget.value)} onBlur={commit}
+        onKeyDown={(e) => { if (e.key === 'Enter') { commit(); e.currentTarget.blur(); } }} />
+      <span>{unit}</span>
+    </label>
   );
 }
 
@@ -291,7 +358,7 @@ function BreedStep({ head, next }: { head: preact.ComponentChildren; next: () =>
 function Recap({ steps, current, onJump, species }: { steps: Step[]; current: number; onJump: (i: number) => void; species: string }) {
   const d = draft.value!;
   const fr = (n: number) => String(n).replace('.', ',');
-  const items = steps.map((s, i) => {
+  const one = (s: Step, i: number) => {
     const a = d.answers?.[s.id];
     let label: string | undefined;
     if (s.kind === 'measure' && a === 'exact' && d[s.measure!] != null) label = `${s.measure === 'temp' ? '' : `${s.name} `}${fr(d[s.measure!]!)}${s.measure === 'temp' ? ' °C' : '/min'}`;
@@ -301,12 +368,14 @@ function Recap({ steps, current, onJump, species }: { steps: Step[]; current: nu
     else if (s.kind === 'weight') label = d.weight ? `${fr(d.weight)} kg` : undefined;
     else if (s.kind === 'labs') label = d.labs.length ? `${d.labs.length} valeur${d.labs.length > 1 ? 's' : ''}` : undefined;
     else label = answerLabel(s, a);
-    return { i, label };
-  }).filter((x) => x.label && x.i !== current);
+    return { i, label, key: s.id };
+  };
+  // Examen : une pastille par élément examiné
+  const items = steps.flatMap((s, i) => (s.rows ? s.rows.map((r) => one(r, i)) : [one(s, i)])).filter((x) => x.label && x.i !== current);
   return (
     <div class="recap">
       <button class="recap-chip" onClick={() => go('/')}>{species}</button>
-      {items.map((x) => <button key={x.i} class="recap-chip" onClick={() => onJump(x.i)}>{x.label}</button>)}
+      {items.map((x) => <button key={x.key} class="recap-chip" onClick={() => onJump(x.i)}>{x.label}</button>)}
     </div>
   );
 }

@@ -9,7 +9,7 @@ import { rankDiseases, discriminants } from '../engine/ddx';
 import { settings } from './settings';
 import { breedByName } from '../data/breeds';
 import { tempFinding, hrFinding, rrFinding, vitalsFor } from '../data/vitals';
-import { buildSteps, answerSigns, motifsOf, SEX_LABEL, NORMAL_ABSENT } from '../data/wizard';
+import { buildSteps, flatSteps, answerSigns, motifsOf, SEX_LABEL, NORMAL_ABSENT } from '../data/wizard';
 
 export type Draft = CaseRecord;
 
@@ -63,7 +63,7 @@ export function setAnswer(stepId: string, answer: string | undefined) {
     // Le stade ne s'applique plus (jeune, mâle) : sa réponse est retirée
     delete answers.stage;
   }
-  const opt = buildSteps({ ...d, ...p }).find((s) => s.id === stepId)?.options?.find((o) => o.id === answer);
+  const opt = flatSteps(buildSteps({ ...d, ...p })).find((s) => s.id === stepId)?.options?.find((o) => o.id === answer);
   if (stepId === 'age') p.age = opt ? `${opt.label}${opt.detail ? ` (${opt.detail})` : ''}` : undefined;
   if (stepId === 'sex') p.sex = answer ? SEX_LABEL[answer] : undefined;
   if (stepId === 'herd') p.herd = answer && answer !== 'seul' ? (d.herd ?? {}) : undefined;

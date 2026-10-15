@@ -2,7 +2,7 @@
 // Chaque cas vérifie l'hypothèse attendue en tête et, pour quelques-uns, ce qui ne doit pas y figurer.
 import { describe, expect, it } from 'vitest';
 import { newCase, setAnswer, setMeasure, toggleSign, toggleMotif, setLab, patch, freezeQuestions, analysis, canAnalyse, draft } from '../src/state/case';
-import { buildSteps, MOTIFS, answerSigns, motifSuggestions } from '../src/data/wizard';
+import { buildSteps, flatSteps, MOTIFS, answerSigns, motifSuggestions } from '../src/data/wizard';
 import { SIGNS, LAB_FINDINGS } from '../src/data/signs';
 import { DISEASES } from '../src/data/diseases';
 import { TREATMENTS, treatmentFor, lineDose } from '../src/data/treatments';
@@ -199,7 +199,7 @@ describe('parcours', () => {
     for (const list of Object.values(MOTIFS)) for (const m of list) for (const s of [...(m.signs ?? []), ...m.sugg]) expect(known.has(s), `${m.id} : ${s}`).toBe(true);
     for (const sp of SPECIES) {
       newCase(sp.id);
-      for (const st of buildSteps(draft.value!)) for (const o of st.options ?? []) for (const s of o.signs ?? []) expect(known.has(s), `${sp.id} ${st.id} : ${s}`).toBe(true);
+      for (const st of flatSteps(buildSteps(draft.value!))) for (const o of st.options ?? []) for (const s of [...(o.signs ?? []), ...(o.absent ?? [])]) expect(known.has(s), `${sp.id} ${st.id} : ${s}`).toBe(true);
     }
   });
 });

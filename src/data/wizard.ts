@@ -18,7 +18,7 @@ export interface Option {
   abnormal?: boolean;
 }
 
-export type StepKind = 'motifs' | 'choice' | 'measure' | 'signs' | 'question' | 'breed' | 'weight' | 'labs';
+export type StepKind = 'motifs' | 'choice' | 'measure' | 'exam' | 'signs' | 'question' | 'breed' | 'weight' | 'labs';
 
 export interface Step {
   id: string;
@@ -36,9 +36,14 @@ export interface Step {
   /** Question ciblée : signe recherché et hypothèses qu'il soutiendrait */
   sign?: string;
   supports?: string[];
+  /** Examen général : rangées (mesures, choix) réunies sur un seul écran */
+  rows?: Step[];
 }
 
-export interface Motif { id: string; label: string; detail?: string; signs?: string[]; sugg: string[] }
+/** Étapes et rangées de l'examen, à plat : chaque élément porte une réponse */
+export const flatSteps = (steps: Step[]): Step[] => steps.flatMap((s) => s.rows ?? [s]);
+
+export interface Motif { id: string; label: string; detail?: string; signs?: string[]; sugg: string[]; /** Tri d'urgence : examen juste après le motif */ urgent?: boolean }
 
 export type Family = 'carn' | 'rum' | 'equ' | 'porc';
 
@@ -63,11 +68,11 @@ export const MOTIFS: Record<Family, Motif[]> = {
     { id: 'loco', label: 'Boiterie, douleur', sugg: ['boiterie', 'boiterie_aigue_1', 'raideur_lever', 'douleur_rachis', 'paresie', 'traumatisme', 'arthrite', 'tiques'] },
     { id: 'peau', label: 'Peau, prurit, oreilles', signs: [], sugg: ['prurit', 'puces', 'otite', 'alopecie', 'lesions_cutanees', 'nodules_cutanes', 'conjonctivite', 'contact_sanglier'] },
     { id: 'repro', label: 'Mise bas, mamelles', sugg: ['ecoulement_vulvaire', 'mammite', 'tremblements', 'convulsions', 'avortement', 'abattement'] },
-    { id: 'urg', label: 'Urgence : trauma, intox, chaleur', sugg: ['traumatisme', 'toxique', 'chaleur_ambiante', 'syncope', 'dyspnee', 'hemorragies', 'convulsions', 'tremblements', 'ptyalisme', 'distension_abdo', 'vomissements_improductifs'] },
+    { id: 'urg', label: 'Urgence : trauma, intox, chaleur', urgent: true, sugg: ['traumatisme', 'toxique', 'chaleur_ambiante', 'syncope', 'dyspnee', 'hemorragies', 'convulsions', 'tremblements', 'ptyalisme', 'distension_abdo', 'vomissements_improductifs'] },
     BILAN,
   ],
   rum: [
-    { id: 'couche', label: 'Décubitus', signs: ['decubitus'], sugg: ['tremblements', 'mammite', 'arret_rumination', 'deshydratation', 'diarrhee', 'paresie', 'ataxie', 'meteorisation'] },
+    { id: 'couche', label: 'Décubitus', urgent: true, signs: ['decubitus'], sugg: ['tremblements', 'mammite', 'arret_rumination', 'deshydratation', 'diarrhee', 'paresie', 'ataxie', 'meteorisation'] },
     { id: 'lait', label: 'Baisse de lait, appétit', signs: ['chute_lait', 'anorexie'], sugg: ['haleine_cetonique', 'ping_gauche', 'ping_droit', 'arret_rumination', 'mammite', 'douleur_garrot', 'amaigrissement', 'constipation', 'diarrhee'] },
     { id: 'mam', label: 'Mammite', signs: ['mammite'], sugg: ['abattement', 'decubitus', 'deshydratation', 'chute_lait', 'diarrhee', 'mammite_induree'] },
     { id: 'post', label: 'Post-partum', signs: ['mise_bas_recente'], sugg: ['retention_placentaire', 'ecoulement_vulvaire', 'decubitus', 'mammite', 'anorexie', 'chute_lait'] },
@@ -78,11 +83,11 @@ export const MOTIFS: Record<Family, Motif[]> = {
     { id: 'peau', label: 'Peau, bouche, yeux', sugg: ['lesions_buccales', 'ptyalisme', 'nodules_cutanes', 'lesions_cutanees', 'oedeme_face', 'conjonctivite', 'prurit', 'croutes_levres'] },
     { id: 'maigre', label: 'Amaigrissement, anémie', sugg: ['amaigrissement', 'muqueuses_pales', 'oedeme', 'diarrhee', 'diarrhee_chronique', 'paturage', 'paturage_humide', 'adenomegalie'] },
     { id: 'avort', label: 'Avortement', signs: ['avortement'], sugg: ['retention_placentaire', 'arthrite'] },
-    { id: 'mort', label: 'Mort subite', signs: ['mort_subite'], sugg: ['hemorragies', 'meteorisation', 'changement_aliment', 'paturage', 'toxique', 'convulsions'] },
+    { id: 'mort', label: 'Mort subite', urgent: true, signs: ['mort_subite'], sugg: ['hemorragies', 'meteorisation', 'changement_aliment', 'paturage', 'toxique', 'convulsions'] },
     BILAN,
   ],
   equ: [
-    { id: 'colique', label: 'Colique', signs: ['douleur_abdo'], sugg: ['colique_severe', 'reflux_gastrique', 'distension_abdo', 'constipation', 'sueurs', 'changement_aliment', 'diarrhee'] },
+    { id: 'colique', label: 'Colique', urgent: true, signs: ['douleur_abdo'], sugg: ['colique_severe', 'reflux_gastrique', 'distension_abdo', 'constipation', 'sueurs', 'changement_aliment', 'diarrhee'] },
     { id: 'loco', label: 'Boiterie, fourbure', sugg: ['boiterie', 'boiterie_aigue_1', 'pouls_digites', 'lesions_podales', 'raideur_lever', 'prise_poids', 'paturage', 'plaie_recente'] },
     { id: 'muscle', label: 'Myopathie, urines foncées', sugg: ['myalgie', 'urines_foncees', 'sueurs', 'effort_recent', 'raideur', 'decubitus', 'paturage', 'plaie_recente'] },
     { id: 'resp', label: 'Toux, jetage', sugg: ['toux', 'jetage', 'dyspnee', 'adenomegalie', 'aliment_naseaux', 'intolerance_effort', 'non_vaccine'] },
@@ -100,7 +105,7 @@ export const MOTIFS: Record<Family, Motif[]> = {
     { id: 'abat', label: 'Abattement, fièvre', signs: ['abattement'], sugg: ['anorexie', 'cyanose', 'hemorragies', 'lesions_cutanees', 'boiterie'] },
     { id: 'peau', label: 'Peau, boiterie', sugg: ['lesions_cutanees', 'boiterie', 'arthrite', 'prurit'] },
     { id: 'repro', label: 'Avortement, mise bas', sugg: ['avortement', 'mise_bas_recente', 'mammite'] },
-    { id: 'mort', label: 'Mort subite', signs: ['mort_subite'], sugg: ['hemorragies', 'cyanose', 'muqueuses_pales'] },
+    { id: 'mort', label: 'Mort subite', urgent: true, signs: ['mort_subite'], sugg: ['hemorragies', 'cyanose', 'muqueuses_pales'] },
     BILAN,
   ],
 };
@@ -275,6 +280,24 @@ export interface WizardCase {
   questions?: { id: string; label: string; supports: string[] }[];
 }
 
+/** Examen général sur un seul écran : constantes, muqueuses, hydratation */
+function examStep(c: WizardCase): Step {
+  const f = family(c.species);
+  const v = vitalsFor(c.species);
+  const rows: Step[] = [
+    { id: 'temp', kind: 'measure', measure: 'temp', unit: '°C', name: 'Température', title: 'Température rectale',
+      norms: v ? `${fr(v.temp[0])} – ${fr(v.temp[1])} °C` : undefined, options: bandOptions('temp', c.species) },
+    { id: 'hr', kind: 'measure', measure: 'hr', unit: '/min', name: 'FC', title: 'Fréquence cardiaque',
+      norms: v ? `${v.hr[0]} – ${v.hr[1]} /min` : undefined, options: bandOptions('hr', c.species) },
+    { id: 'rr', kind: 'measure', measure: 'rr', unit: '/min', name: 'FR', title: 'Fréquence respiratoire',
+      norms: v ? `${v.rr[0]} – ${v.rr[1]} /min au repos${f === 'carn' ? ' ; > 40 chez un cardiaque : œdème pulmonaire probable' : ''}` : undefined,
+      options: bandOptions('rr', c.species) },
+    { id: 'muq', kind: 'choice', name: 'Muqueuses', title: 'Muqueuses', options: MUCOUS },
+    { id: 'hyd', kind: 'choice', name: 'Hydratation', title: 'Hydratation', options: HYDRATION },
+  ];
+  return { id: 'exam', kind: 'exam', name: 'Examen', title: 'Examen général', sub: 'Touchez ce qui a été examiné, puis Suivant.', rows };
+}
+
 export function buildSteps(c: WizardCase): Step[] {
   const sp = speciesById(c.species);
   const f = family(c.species);
@@ -285,6 +308,9 @@ export function buildSteps(c: WizardCase): Step[] {
     options: motifsFor(c.species).map((m) => ({ id: m.id, label: m.label, detail: m.detail })) });
   const bilan = motifsOf(c).includes('bilan');
   if (bilan) steps.push({ id: 'labs', kind: 'labs', name: 'Analyses', title: 'Valeurs d’analyses' });
+  // Urgence : l'examen (tri) passe avant le signalement
+  const urgent = selectedMotifs(c).some((m) => m.urgent);
+  if (urgent) steps.push(examStep(c));
   if (f !== 'carn' || sp.group === 'faune') steps.push({ id: 'herd', kind: 'choice', name: 'Effectif', title: 'Un ou plusieurs animaux ?', options: HERD });
   steps.push({ id: 'age', kind: 'choice', name: 'Âge', title: 'Âge', norms: v?.senior ? `Considéré comme âgé à partir de ${v.senior} ans.` : undefined, options: ageOptions(c.species) });
   steps.push({ id: 'sex', kind: 'choice', name: 'Sexe', title: 'Sexe', options: sexOptions(c.species) });
@@ -293,19 +319,11 @@ export function buildSteps(c: WizardCase): Step[] {
     steps.push({ id: 'stage', kind: 'choice', name: 'Stade', title: f === 'carn' ? 'Chaleurs, gestation ou mise bas ?' : 'Stade', options: stage,
       norms: f === 'carn' ? 'Pyomètre : surtout 4 à 8 semaines après les chaleurs. Éclampsie : dans les 4 semaines qui suivent la mise bas.' : undefined });
   }
-  steps.push({ id: 'temp', kind: 'measure', measure: 'temp', unit: '°C', name: 'Température', title: 'Température rectale',
-    norms: v ? `Normale chez l’adulte au repos : ${fr(v.temp[0])} – ${fr(v.temp[1])} °C.` : 'Pas de valeur de référence intégrée pour cette espèce.', options: bandOptions('temp', c.species) });
+  if (!urgent) steps.push(examStep(c));
   steps.push({ id: 'signs', kind: 'signs', name: 'Signes', title: 'Autres signes ?', sub: 'Touchez tout ce qui s’applique, puis Suivant.' });
   for (const q of c.questions ?? []) {
     steps.push({ id: `q:${q.id}`, kind: 'question', name: 'Question ciblée', title: questionText(q.id, q.label), sign: q.id, supports: q.supports });
   }
-  steps.push({ id: 'hr', kind: 'measure', measure: 'hr', unit: '/min', name: 'FC', title: 'Fréquence cardiaque',
-    norms: v ? `Au repos : ${v.hr[0]} – ${v.hr[1]} battements/min.` : undefined, options: bandOptions('hr', c.species) });
-  steps.push({ id: 'rr', kind: 'measure', measure: 'rr', unit: '/min', name: 'FR', title: 'Fréquence respiratoire', sub: 'Au repos, hors halètement.',
-    norms: v ? `Au repos : ${v.rr[0]} – ${v.rr[1]} mouvements/min.${f === 'carn' ? ' Au-delà de 40 au repos chez un cardiaque : œdème pulmonaire probable.' : ''}` : undefined,
-    options: bandOptions('rr', c.species) });
-  steps.push({ id: 'muq', kind: 'choice', name: 'Muqueuses', title: 'Muqueuses', norms: 'Normales : roses, temps de recoloration capillaire inférieur à 2 secondes.', options: MUCOUS });
-  steps.push({ id: 'hyd', kind: 'choice', name: 'Hydratation', title: 'Hydratation', norms: 'Pli de peau qui s’efface aussitôt, œil non enfoncé, muqueuses humides.', options: HYDRATION });
   if (breedsFor(c.species).length) steps.push({ id: 'breed', kind: 'breed', name: 'Race', title: 'Race', sub: 'Prédispositions, gabarit.' });
   steps.push({ id: 'weight', kind: 'weight', name: 'Poids', title: 'Poids', sub: 'Indispensable pour calculer les doses.' });
   if (!bilan) steps.push({ id: 'labs', kind: 'labs', name: 'Analyses', title: 'Des analyses ?' });
@@ -317,7 +335,7 @@ export function answerSigns(c: WizardCase): { present: string[]; absent: string[
   const a = c.answers ?? {};
   const present = new Set<string>(motifSuggestions(c).preset);
   const absent = new Set<string>();
-  for (const s of buildSteps(c)) {
+  for (const s of flatSteps(buildSteps(c))) {
     const ans = a[s.id];
     if (!ans) continue;
     if (s.kind === 'question' && s.sign) {
