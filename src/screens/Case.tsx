@@ -86,8 +86,15 @@ function StepView({ s, pick, next }: { s: Step; pick: (id: string, a: string) =>
     return (
       <>
         {head}
-        <div class="opts one">
-          {s.options!.map((o) => <Opt key={o.id} o={o} sel={chosen.includes(o.id)} check onClick={() => toggleMotif(o.id)} />)}
+        <div class="motif-chips">
+          {s.options!.map((o) => {
+            const on = chosen.includes(o.id);
+            return (
+              <button key={o.id} class={`motif-chip ${on ? 'on' : ''}`} onClick={() => toggleMotif(o.id)} aria-pressed={on}>
+                {on && <Icon name="check" size={16} />}{o.label}
+              </button>
+            );
+          })}
         </div>
       </>
     );

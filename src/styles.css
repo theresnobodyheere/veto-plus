@@ -584,6 +584,15 @@ main.wiz > .section-foot { margin: -8px 0 0; }
 .opt.sel { background: var(--brand); color: var(--on-brand); box-shadow: none; }
 .opt.sel .opt-d { color: color-mix(in srgb, var(--on-brand) 80%, transparent); }
 .opt.sel.bad .opt-t::after { background: var(--on-brand); }
+.motif-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.motif-chip {
+  display: inline-flex; align-items: center; gap: 6px; border: 0; background: var(--card); color: var(--text);
+  border-radius: 99px; padding: 0 14px; min-height: 42px; font-size: 16px; font-weight: 500; transition: background-color 0.15s;
+}
+.motif-chip:active { opacity: 0.55; }
+.motif-chip.on { background: var(--brand); color: var(--on-brand); }
+.motif-chip .icon { stroke-width: 3; }
+.motif-chip:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
 .opt.multi { position: relative; padding-right: 40px; }
 .opt-check {
   position: absolute; top: 50%; right: 14px; margin-top: -11px; width: 22px; height: 22px; border-radius: 50%;
