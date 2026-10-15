@@ -14,6 +14,7 @@ export interface CaseRecord {
   ref?: string;
   age?: string;
   sex?: string;
+  breed?: string;
   weight?: number;
   herd?: Herd;
   signs: string[];

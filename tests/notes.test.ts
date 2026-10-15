@@ -41,7 +41,8 @@ describe('lecture du commentaire', () => {
     expect(f.age).toBe('10 ans');
     expect(f.sex).toBe('Mâle');
     expect(f.temp).toBe(38.5);
-    expect(f.signs).toEqual(expect.arrayContaining(['abattement', 'anorexie', 'distension_abdo', 'grand_chien', 'age', 'male']));
+    expect(f.breed).toBe('Setter anglais');
+    expect(f.signs).toEqual(expect.arrayContaining(['abattement', 'anorexie', 'distension_abdo', 'age', 'male']));
     expect(f.signs).not.toContain('fievre');
     expect(f.signs).not.toContain('femelle_entiere');
   });
@@ -66,5 +67,14 @@ describe('lecture du commentaire', () => {
   });
   it('faute de frappe sur un mot long', () => {
     expect(parseNotes('chat très létargique, vomissemnts', 'chat').signs).toEqual(expect.arrayContaining(['abattement', 'vomissements']));
+  });
+
+  it('race : la plus précise, croisement, espèce, pièges', () => {
+    expect(parseNotes('setter irlandais de 6 ans', 'chien').breed).toBe('Setter irlandais');
+    expect(parseNotes('labrador croisé, 30 kg', 'chien').breed).toBe('Labrador croisé');
+    expect(parseNotes('vache prim holstein en début de lactation', 'bovin').breed).toBe('Prim’Holstein');
+    expect(parseNotes('jument trotteur, 8 ans', 'cheval').breed).toBe('Trotteur français');
+    expect(parseNotes('chevaux au pré depuis hier', 'cheval').breed).toBeUndefined();
+    expect(parseNotes('vomit 3 fois par jour', 'chien').breed).toBeUndefined();
   });
 });

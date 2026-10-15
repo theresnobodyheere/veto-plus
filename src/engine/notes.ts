@@ -6,11 +6,13 @@ import type { LabValue } from './interpret';
 import { parseLabText } from '../ocr/parse';
 import { matchSigns, norm } from './textSigns';
 import { vitalsFor } from '../data/vitals';
+import { findBreed } from '../data/breeds';
 
 export interface NotesFacts {
   weight?: number;
   age?: string;
   sex?: string;
+  breed?: string;
   herd?: Herd;
   /** Température rectale (°C) et fréquence cardiaque (/min) lues dans le texte */
   temp?: number;
@@ -56,6 +58,8 @@ export function parseNotes(text: string, species: SpeciesId): NotesFacts {
   else if (!entire && /\b(castre|hongre|sterilise)\b/.test(t)) facts.sex = 'Mâle castré';
   else if (female) facts.sex = 'Femelle';
   else if (male) facts.sex = 'Mâle';
+
+  facts.breed = findBreed(text, species);
 
   // Température : « T 39,8 », « 39,8 °C », « 38,5 de température », « température à 40 »
   const temp = t.match(/\b(?:temperature|temp|t)\s*°?\s*(?:rectale\s*)?(?:de|a|:|=)?\s*(\d{2}(?:[.,]\d{1,2})?)\b/)

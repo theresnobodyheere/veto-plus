@@ -217,4 +217,13 @@ describe('solidité du classement', () => {
     const r = run('chien', {}, ['male', 'abattement', 'anorexie', 'distension_abdo', 'pupd']);
     expect(r.ddx.map((x) => x.disease.id)).not.toContain('pyometre');
   });
+
+  it('la race renseigne le gabarit : grande race à thorax profond', async () => {
+    const { newCase, patch, analysis } = await import('../src/state/case');
+    newCase('chien');
+    patch({ breed: 'Dogue allemand', signs: ['distension_abdo', 'vomissements_improductifs'] });
+    expect(analysis.value!.findings).toContain('grand_chien');
+    patch({ breed: 'Chihuahua' });
+    expect(analysis.value!.findings).not.toContain('grand_chien');
+  });
 });

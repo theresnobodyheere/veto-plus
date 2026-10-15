@@ -86,6 +86,12 @@ function negated(t: string[], start: number, end: number, words: string[]): bool
   return NEG_AFTER.has(t[end + 1] ?? '');
 }
 
+/** L'expression figure-t-elle dans le texte (mêmes tolérances que pour les signes, sans négation) ? */
+export function hasPhrase(text: string, phrase: string): boolean {
+  const words = tokens(phrase);
+  return words.length > 0 && find(tokens(text), words) != null;
+}
+
 export function signsForSpecies(species: SpeciesId): Sign[] {
   const fam = new Set<SpeciesId>([species, ...speciesById(species).ddx]);
   return SIGNS.filter((s) => !s.species || s.species.some((x) => fam.has(x)));

@@ -151,7 +151,7 @@ export const SIGNS: Sign[] = [
   { id: 'plusieurs_animaux', label: "Plusieurs animaux atteints dans l'élevage", group: 'contexte', kw: ['troupeau', 'plusieurs', 'cheptel', 'lot'] },
   { id: 'contact_sanglier', label: 'Contact avec sanglier (chasse, abats)', group: 'contexte', species: ['chien', 'porc'], kw: ['chasse', 'sanglier', 'abats crus'] },
   { id: 'ensilage', label: "Ensilage (mauvaise qualité)", group: 'contexte', species: RUM, kw: ['ensilage', 'enrubanné'] },
-  { id: 'grand_chien', label: 'Chien de grande race, thorax profond', group: 'contexte', species: ['chien'], kw: ['grande race', 'dogue', 'berger allemand', 'setter', 'dogue allemand', 'grand danois', 'saint-bernard', 'saint bernard', 'leonberg', 'terre-neuve', 'dobermann', 'weimaraner', 'braque', 'irish setter', 'bouvier bernois', 'bouvier', 'labrador', 'golden', 'berger', 'beauceron', 'mâtin', 'montagne des pyrénées', 'grande taille'] },
+  { id: 'grand_chien', label: 'Chien de grande race, thorax profond', group: 'contexte', species: ['chien'], kw: ['grande race', 'grande taille', 'thorax profond', 'race géante'] },
   { id: 'effort_recent', label: 'Effort intense récent / reprise du travail', group: 'contexte', species: ['cheval', 'chien'], kw: ['effort', 'travail', 'course', 'concours'] },
   { id: 'plaie_recente', label: 'Plaie récente / castration / mise bas', group: 'contexte', kw: ['plaie', 'blessure', 'castration', 'clou', 'coupure', 'morsure', 'griffure', 'opéré récemment'] },
 ];

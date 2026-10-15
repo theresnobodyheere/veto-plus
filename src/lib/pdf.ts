@@ -67,7 +67,7 @@ export async function buildPdf(): Promise<Blob> {
   // ——— Animal : encadré gris clair, libellé à gauche, valeur à droite ———
   const dept = departementByCode(s.departement);
   const rows: [string, string][] = [
-    ['Espèce', sp.label], ['Référence', d.ref ?? ''], ['Âge', d.age ?? ''], ['Sexe', d.sex ?? ''],
+    ['Espèce', sp.label], ['Référence', d.ref ?? ''], ['Race', d.breed ?? ''], ['Âge', d.age ?? ''], ['Sexe', d.sex ?? ''],
     ['Poids', d.weight ? `${d.weight.toLocaleString('fr-FR')} kg` : ''],
     ['Cas collectif', d.herd && (d.herd.effectif || d.herd.malades || d.herd.morts) ? `effectif ${d.herd.effectif ?? '?'} · malades ${d.herd.malades ?? '?'} · morts ${d.herd.morts ?? '?'}` : ''],
     ['Département', dept ? `${dept.nom} (${dept.code})` : ''],

@@ -6,6 +6,7 @@ import { SIGN_GROUPS, signLabel, type SignGroup } from '../data/signs';
 import { formatValue } from '../engine/interpret';
 import { searchSigns, signsForSpecies } from '../engine/textSigns';
 import { parseNotes } from '../engine/notes';
+import { breedsFor } from '../data/breeds';
 import { TopBar } from '../components/ui';
 import { Icon } from '../components/Icon';
 import { go } from '../lib/router';
@@ -61,6 +62,10 @@ function Signalement() {
       <div class="list form">
         <label class="form-row"><span class="form-label">Référence</span>
           <input class="wide" type="text" name="reference-animal" autoComplete="off" autoCorrect="off" value={d.ref ?? ''} placeholder={sp.group === 'rurale' ? 'Élevage, n° animal' : 'Facultatif'} onInput={(e) => patch({ ref: e.currentTarget.value })} /></label>
+        <label class="form-row"><span class="form-label">Race</span>
+          <input class="wide" type="text" list="races" autoComplete="off" value={d.breed ?? ''} placeholder={breedsFor(d.species).length ? 'Choisir ou saisir' : 'Facultatif'}
+            onInput={(e) => patchManual({ breed: e.currentTarget.value || undefined })} /></label>
+        <datalist id="races">{breedsFor(d.species).map((b) => <option key={b.name} value={b.name} />)}</datalist>
         <label class="form-row"><span class="form-label">Poids</span>
           <input type="text" inputMode="decimal" value={d.weight ?? ''} placeholder="—" onInput={(e) => patchManual({ weight: num(e.currentTarget.value) || undefined })} /><span class="form-unit">kg</span></label>
         <label class="form-row"><span class="form-label">Âge</span>
@@ -264,6 +269,7 @@ function Notes() {
     vitals.hr != null && `FC ${vitals.hr}/min`,
     auto.weight && d.weight != null && `poids ${d.weight} kg`,
     auto.age && d.age && `âge ${d.age}`,
+    auto.breed && d.breed && d.breed.toLowerCase(),
     auto.sex && d.sex && d.sex.toLowerCase(),
     auto.herd && d.herd && 'effectifs',
     auto.signs.length > 0 && `${auto.signs.length} signe${auto.signs.length > 1 ? 's' : ''}`,
