@@ -16,6 +16,8 @@ import { searchSigns, signsForSpecies } from '../engine/textSigns';
 import { Icon } from '../components/Icon';
 import { go } from '../lib/router';
 
+interface NextAction { label: string; onClick: () => void; /** pas encore utilisable : le bouton n'apparaît pas */ hidden?: boolean; /** remplace Analyser (même destination) */ final?: boolean }
+
 export function Case() {
   const d = draft.value;
   if (!d) { go('/'); return null; }
@@ -35,6 +37,14 @@ export function Case() {
   };
   // Un choix est visible un court instant avant de passer à la suite
   const pick = (stepId: string, answer: string) => { setAnswer(stepId, answer); setTimeout(next, 160); };
+  // Étapes à choix multiple ou à saisie : le bouton pour continuer est toujours en bas de l'écran
+  const nMotifs = motifsOf(d).length;
+  const last = steps.at(-1)?.id === s.id;
+  const action: NextAction | undefined =
+    s.kind === 'motifs' ? { label: `Suivant · ${nMotifs} motif${nMotifs > 1 ? 's' : ''}`, hidden: !nMotifs, onClick: next }
+    : s.kind === 'signs' ? { label: d.signs.length ? `Suivant · ${d.signs.length} signe${d.signs.length > 1 ? 's' : ''}` : 'Aucun autre signe', onClick: next }
+    : s.kind === 'labs' ? (last ? { label: 'Voir le résultat', onClick: () => void finish(), final: true } : { label: 'Continuer', onClick: next })
+    : undefined;
 
   return (
     <>
@@ -45,23 +55,21 @@ export function Case() {
           </button>
           {/* L'animal, choisi sur l'écran d'accueil, est la question 1 */}
           <span class="wiz-name">{s.name} · {i + 2}/{steps.length + 1}</span>
-          {s.kind === 'motifs'
-            ? <button class="wiz-skip" onClick={next} hidden={!motifsOf(d).length}>Suivant</button>
-            : <button class="wiz-skip" onClick={next}>Passer</button>}
+          {action ? <span /> : <button class="wiz-skip" onClick={next}>Passer</button>}
         </div>
         <div class="wiz-progress"><div style={{ width: `${Math.round(((i + 2) / (steps.length + 1)) * 100)}%` }} /></div>
         <Recap steps={steps} current={i} onJump={goTo} species={sp.label} />
       </header>
       <main class="wiz">
         {i === 0 && sp.note && <div class="alert reg"><p>{sp.note}</p></div>}
-        <StepView s={s} pick={pick} next={next} finish={finish} />
+        <StepView s={s} pick={pick} next={next} />
       </main>
-      <AnalyseBar onAnalyse={finish} />
+      <AnalyseBar onAnalyse={finish} action={action} />
     </>
   );
 }
 
-function StepView({ s, pick, next, finish }: { s: Step; pick: (id: string, a: string) => void; next: () => void; finish: () => void }) {
+function StepView({ s, pick, next }: { s: Step; pick: (id: string, a: string) => void; next: () => void }) {
   const d = draft.value!;
   const answer = d.answers?.[s.id];
   const head = (
@@ -78,12 +86,9 @@ function StepView({ s, pick, next, finish }: { s: Step; pick: (id: string, a: st
     return (
       <>
         {head}
-        <div class="opts">
+        <div class="opts one">
           {s.options!.map((o) => <Opt key={o.id} o={o} sel={chosen.includes(o.id)} check onClick={() => toggleMotif(o.id)} />)}
         </div>
-        <button class="btn primary block" disabled={!chosen.length} onClick={next}>
-          {chosen.length ? `Suivant · ${chosen.length} motif${chosen.length > 1 ? 's' : ''}` : 'Choisissez au moins un motif'}
-        </button>
       </>
     );
   }
@@ -116,7 +121,7 @@ function StepView({ s, pick, next, finish }: { s: Step; pick: (id: string, a: st
     );
   }
 
-  if (s.kind === 'signs') return <SignsStep head={head} next={next} />;
+  if (s.kind === 'signs') return <SignsStep head={head} />;
   if (s.kind === 'breed') return <BreedStep head={head} next={next} />;
 
   if (s.kind === 'weight') {
@@ -142,7 +147,6 @@ function StepView({ s, pick, next, finish }: { s: Step; pick: (id: string, a: st
           <p class="section-foot">Elle reste sur cet iPhone.</p>
         </>
       )}
-      <button class="btn primary block" style="margin-top:16px" onClick={last ? finish : next}>{last ? 'Voir le résultat' : 'Continuer'}</button>
     </>
   );
 }
@@ -196,7 +200,7 @@ function MeasureStep({ s, head, pick, next }: { s: Step; head: preact.ComponentC
   );
 }
 
-function SignsStep({ head, next }: { head: preact.ComponentChildren; next: () => void }) {
+function SignsStep({ head }: { head: preact.ComponentChildren }) {
   const d = draft.value!;
   const [q, setQ] = useState('');
   const all = useMemo(() => signsForSpecies(d.species), [d.species]);
@@ -232,9 +236,6 @@ function SignsStep({ head, next }: { head: preact.ComponentChildren; next: () =>
           })}
         </div>
       )}
-      <button class="btn block" style="margin-top:12px" onClick={next}>
-        {d.signs.length ? `Suivant · ${d.signs.length} signe${d.signs.length > 1 ? 's' : ''}` : 'Aucun autre signe'}
-      </button>
     </>
   );
 }
@@ -289,23 +290,28 @@ function Recap({ steps, current, onJump, species }: { steps: Step[]; current: nu
   );
 }
 
-/** Barre du bas : n'apparaît qu'avec assez de réponses (hypothèse en tête et bouton Analyser), ou pour une alerte vitale */
-function AnalyseBar({ onAnalyse }: { onAnalyse: () => void }) {
+/** Barre du bas : bouton pour continuer (étapes à choix multiple), et Analyser dès qu'il y a assez de réponses */
+function AnalyseBar({ onAnalyse, action }: { onAnalyse: () => void; action?: NextAction }) {
   const a = analysis.value!;
   const ok = canAnalyse.value;
   const top = a.ddx[0];
   const critical = a.alerts.some((x) => x.level === 'critique');
-  if (!ok && !critical) return null;
+  const act = action && !action.hidden ? action : undefined;
+  if (!ok && !critical && !act) return null;
   const lk = top && likelihood(top, top.score);
+  const analyse = ok && !act?.final;
   return (
     <div class="wiz-bar">
       {critical && <div class="wiz-alert"><Icon name="warning" size={16} />Alerte vitale : voir le résultat</div>}
       {ok && top && <div class="wiz-lead"><span class="grow">En tête : <b>{top.disease.name}</b></span><span class={`lk-${lk}`}>{lk}</span></div>}
-      {ok && (
-        <button class="btn primary block" onClick={onAnalyse}>
-          Analyser · {a.findings.length} élément{a.findings.length > 1 ? 's' : ''}
-        </button>
-      )}
+      <div class="wiz-actions">
+        {act && <button class={`btn ${analyse ? '' : 'primary'}`} onClick={act.onClick}>{act.label}</button>}
+        {analyse && (
+          <button class="btn primary" onClick={onAnalyse}>
+            Analyser{act ? '' : ` · ${a.findings.length} élément${a.findings.length > 1 ? 's' : ''}`}
+          </button>
+        )}
+      </div>
     </div>
   );
 }

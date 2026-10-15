@@ -131,6 +131,10 @@ small, .muted { color: var(--muted); }
 .back .icon { width: 24px; height: 24px; stroke-width: 2.2; }
 .back:active, .btn:active, .list-item:active, .chip:active { opacity: 0.55; }
 .large-title { padding: 2px 16px 6px; }
+/* Grand titre remonté dans la ligne de navigation vide (même hauteur que l'écran Cas) ; la barre devient opaque au défilement */
+.navbar.has-large:not(.scrolled) { background: transparent; pointer-events: none; }
+.navbar.has-large:not(.scrolled) :is(.back, .banner) { pointer-events: auto; }
+.navbar.has-large:not(:has(.banner)) + .large-title { margin-top: -38px; }
 .large-title h1 { margin: 0; }
 
 .banner {
@@ -570,6 +574,7 @@ main.wiz > .section-foot { margin: -8px 0 0; }
 
 .opts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .opts.one { grid-template-columns: 1fr; }
+.opts.one .opt { min-height: 54px; }
 .opt {
   border: 0; background: var(--card); color: var(--text); border-radius: 14px; padding: 12px 14px; min-height: 64px;
   text-align: left; display: flex; flex-direction: column; justify-content: center; gap: 2px; transition: transform 0.08s, background-color 0.15s;
@@ -584,7 +589,7 @@ main.wiz > .section-foot { margin: -8px 0 0; }
 .opt.sel.bad .opt-t::after { background: var(--on-brand); }
 .opt.multi { position: relative; padding-right: 40px; }
 .opt-check {
-  position: absolute; top: 10px; right: 10px; width: 22px; height: 22px; border-radius: 50%;
+  position: absolute; top: 50%; right: 14px; margin-top: -11px; width: 22px; height: 22px; border-radius: 50%;
   box-shadow: inset 0 0 0 1.5px var(--faint); display: flex; align-items: center; justify-content: center;
 }
 .opt.sel .opt-check { background: var(--on-brand); color: var(--brand); box-shadow: none; }
@@ -608,6 +613,8 @@ main.wiz > .section-foot { margin: -8px 0 0; }
 .wiz-bar > * { max-width: 688px; width: 100%; margin: 0 auto; }
 .wiz-lead { display: flex; gap: 8px; font-size: 13px; color: var(--muted); min-height: 17px; }
 .wiz-lead b { color: var(--text); font-weight: 600; }
+.wiz-actions { display: flex; gap: 10px; }
+.wiz-actions .btn { flex: 1; min-height: 50px; padding: 0 12px; }
 .wiz-alert { display: flex; gap: 6px; align-items: center; font-size: 13px; font-weight: 600; color: var(--crit); }
 
 /* ——— Conduite à tenir (résultat) ——— */
