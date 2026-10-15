@@ -582,6 +582,13 @@ main.wiz > .section-foot { margin: -8px 0 0; }
 .opt.sel { background: var(--brand); color: var(--on-brand); box-shadow: none; }
 .opt.sel .opt-d { color: color-mix(in srgb, var(--on-brand) 80%, transparent); }
 .opt.sel.bad .opt-t::after { background: var(--on-brand); }
+.opt.multi { position: relative; padding-right: 40px; }
+.opt-check {
+  position: absolute; top: 10px; right: 10px; width: 22px; height: 22px; border-radius: 50%;
+  box-shadow: inset 0 0 0 1.5px var(--faint); display: flex; align-items: center; justify-content: center;
+}
+.opt.sel .opt-check { background: var(--on-brand); color: var(--brand); box-shadow: none; }
+.opt-check .icon { stroke-width: 3; }
 .opt.ghost { background: none; box-shadow: inset 0 0 0 1px var(--line); min-height: 48px; font-size: 17px; color: var(--brand); align-items: center; }
 .opts.yn .opt { min-height: 76px; align-items: center; text-align: center; }
 .opts.yn .wide { grid-column: 1 / -1; min-height: 50px; }

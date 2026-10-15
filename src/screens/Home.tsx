@@ -4,7 +4,7 @@ import { SPECIES, speciesById, type SpeciesId } from '../data/species';
 import { Chevron } from '../components/ui';
 import { Icon } from '../components/Icon';
 import { draft, newCase } from '../state/case';
-import { motifById } from '../data/wizard';
+import { motifsOf, selectedMotifs } from '../data/wizard';
 import { go } from '../lib/router';
 
 const DOMESTIC: { id: SpeciesId; detail?: string }[] = [
@@ -17,7 +17,7 @@ export function Home() {
   const [picked, setPicked] = useState<SpeciesId | null>(null);
   // Un choix est visible un court instant avant de passer à la question suivante
   const start = (id: SpeciesId) => { setPicked(id); setTimeout(() => { newCase(id); go('/cas'); }, 160); };
-  const current = draft.value && !draft.value.id && draft.value.motif ? draft.value : null;
+  const current = draft.value && !draft.value.id && motifsOf(draft.value).length ? draft.value : null;
 
   const tile = (id: SpeciesId, detail?: string) => {
     const sp = speciesById(id);
@@ -60,7 +60,7 @@ export function Home() {
             <div class="list">
               <button class="list-item" onClick={() => go('/cas')}>
                 <span class="grow"><b>{speciesById(current.species).label}</b>
-                  <div class="sub">{motifById(current.species, current.motif)?.label ?? 'Saisie commencée'}</div></span>
+                  <div class="sub">{selectedMotifs(current).map((m) => m.label).join(' + ') || 'Saisie commencée'}</div></span>
                 <Chevron />
               </button>
             </div>

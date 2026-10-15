@@ -1,21 +1,22 @@
 // Cas de référence : motifs de consultation fréquents saisis comme dans le parcours de l'appli.
 // Chaque cas vérifie l'hypothèse attendue en tête et, pour quelques-uns, ce qui ne doit pas y figurer.
 import { describe, expect, it } from 'vitest';
-import { newCase, setAnswer, setMeasure, toggleSign, setLab, patch, freezeQuestions, analysis, canAnalyse, draft } from '../src/state/case';
-import { buildSteps, MOTIFS, answerSigns } from '../src/data/wizard';
+import { newCase, setAnswer, setMeasure, toggleSign, toggleMotif, setLab, patch, freezeQuestions, analysis, canAnalyse, draft } from '../src/state/case';
+import { buildSteps, MOTIFS, answerSigns, motifSuggestions } from '../src/data/wizard';
 import { SIGNS, LAB_FINDINGS } from '../src/data/signs';
 import { DISEASES } from '../src/data/diseases';
 import { TREATMENTS, treatmentFor, lineDose } from '../src/data/treatments';
 import { SPECIES, type SpeciesId } from '../src/data/species';
 
 interface Input {
-  motif: string; herd?: string; age?: string; sex?: string; stage?: string; temp?: string; hr?: string; muq?: string; hyd?: string;
+  motif: string | string[]; herd?: string; age?: string; sex?: string; stage?: string; temp?: string; hr?: string; muq?: string; hyd?: string;
   signs?: string[]; yes?: string[]; no?: string[]; labs?: Record<string, number>; breed?: string; weight?: number;
 }
 
 function run(species: SpeciesId, x: Input) {
   newCase(species);
-  for (const k of ['motif', 'herd', 'age', 'sex', 'stage', 'temp', 'hr', 'muq', 'hyd'] as const) if (x[k]) setAnswer(k, x[k]);
+  for (const m of [x.motif].flat()) toggleMotif(m);
+  for (const k of ['herd', 'age', 'sex', 'stage', 'temp', 'hr', 'muq', 'hyd'] as const) if (x[k]) setAnswer(k, x[k]);
   for (const s of x.signs ?? []) toggleSign(s);
   for (const [analyte, value] of Object.entries(x.labs ?? {})) setLab({ analyte, value, source: 'manuel' });
   if (x.breed) patch({ breed: x.breed });
@@ -108,7 +109,7 @@ describe('cas de référence', () => {
 describe('parcours', () => {
   it('l’analyse se débloque après le motif et 3 réponses', () => {
     newCase('chien');
-    setAnswer('motif', 'dig');
+    toggleMotif('dig');
     expect(canAnalyse.value).toBe(false);
     setAnswer('age', 'adulte');
     setAnswer('sex', 'me');
@@ -128,7 +129,7 @@ describe('parcours', () => {
   });
   it('le stade ne s’affiche que pour une femelle adulte', () => {
     newCase('bovin');
-    setAnswer('motif', 'lait');
+    toggleMotif('lait');
     setAnswer('sex', 'm');
     expect(buildSteps(draft.value!).some((s) => s.id === 'stage')).toBe(false);
     setAnswer('sex', 'f');
@@ -140,8 +141,30 @@ describe('parcours', () => {
   });
   it('un bilan sanguin fait passer les analyses en deuxième', () => {
     newCase('chat');
-    setAnswer('motif', 'bilan');
+    toggleMotif('bilan');
     expect(buildSteps(draft.value!)[1].id).toBe('labs');
+  });
+  it('plusieurs motifs : leurs signes et suggestions s’additionnent', () => {
+    run('chien', { motif: ['pupd', 'abat'] });
+    expect(analysis.value!.findings).toEqual(expect.arrayContaining(['pupd', 'abattement', 'anorexie']));
+    const { preset, sugg } = motifSuggestions(draft.value!);
+    expect(preset).toEqual(['pupd', 'abattement', 'anorexie']);
+    expect(sugg).toContain('polyphagie');
+    expect(sugg).toContain('ictere');
+    expect(sugg).not.toContain('abattement');
+    toggleMotif('abat');
+    expect(analysis.value!.findings).not.toContain('anorexie');
+  });
+  it('un motif « bilan » parmi d’autres fait passer les analyses en deuxième', () => {
+    run('chat', { motif: ['dig', 'bilan'] });
+    expect(buildSteps(draft.value!)[1].id).toBe('labs');
+  });
+  it('un cas enregistré avec un seul motif reste lisible', () => {
+    newCase('chien');
+    patch({ motif: 'pupd' });
+    expect(analysis.value!.findings).toContain('pupd');
+    toggleMotif('dig');
+    expect(draft.value!.motifs).toEqual(['pupd', 'dig']);
   });
   it('tous les signes du parcours existent', () => {
     const known = new Set([...SIGNS.map((s) => s.id), ...Object.keys(LAB_FINDINGS)]);

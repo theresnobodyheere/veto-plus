@@ -16,7 +16,7 @@ export interface Option {
   abnormal?: boolean;
 }
 
-export type StepKind = 'choice' | 'measure' | 'signs' | 'question' | 'breed' | 'weight' | 'labs';
+export type StepKind = 'motifs' | 'choice' | 'measure' | 'signs' | 'question' | 'breed' | 'weight' | 'labs';
 
 export interface Step {
   id: string;
@@ -105,6 +105,23 @@ export const MOTIFS: Record<Family, Motif[]> = {
 
 export const motifsFor = (species: SpeciesId): Motif[] => MOTIFS[family(species)];
 export const motifById = (species: SpeciesId, id?: string): Motif | undefined => motifsFor(species).find((m) => m.id === id);
+
+/** Motifs choisis (plusieurs possibles ; les cas enregistrés avant n'en ont qu'un, dans « motif ») */
+export const motifsOf = (c: { motif?: string; motifs?: string[] }): string[] => c.motifs ?? (c.motif ? [c.motif] : []);
+
+/** Motifs choisis, dans l'ordre de la liste de l'espèce */
+export function selectedMotifs(c: { species: SpeciesId; motif?: string; motifs?: string[] }): Motif[] {
+  const ids = new Set(motifsOf(c));
+  return motifsFor(c.species).filter((m) => ids.has(m.id));
+}
+
+/** Signes proposés à l'étape des signes : ceux des motifs choisis, sans doublon */
+export function motifSuggestions(c: { species: SpeciesId; motif?: string; motifs?: string[] }): { preset: string[]; sugg: string[] } {
+  const ms = selectedMotifs(c);
+  const preset = [...new Set(ms.flatMap((m) => m.signs ?? []))];
+  const sugg = [...new Set(ms.flatMap((m) => m.sugg))].filter((x) => !preset.includes(x));
+  return { preset, sugg };
+}
 
 // ——— Signalement ———
 
@@ -242,6 +259,7 @@ export const questionText = (sign: string, label: string) => QUESTION_TEXT[sign]
 export interface WizardCase {
   species: SpeciesId;
   motif?: string;
+  motifs?: string[];
   answers?: Record<string, string>;
   questions?: { id: string; label: string; supports: string[] }[];
 }
@@ -252,9 +270,10 @@ export function buildSteps(c: WizardCase): Step[] {
   const a = c.answers ?? {};
   const v = vitalsFor(c.species);
   const steps: Step[] = [];
-  steps.push({ id: 'motif', kind: 'choice', name: 'Motif', title: 'Motif de consultation', sub: 'Le problème principal oriente les questions suivantes.',
+  steps.push({ id: 'motif', kind: 'motifs', name: 'Motif', title: 'Motifs de consultation', sub: 'Plusieurs choix possibles, puis Suivant.',
     options: motifsFor(c.species).map((m) => ({ id: m.id, label: m.label, detail: m.detail })) });
-  if (c.motif === 'bilan') steps.push({ id: 'labs', kind: 'labs', name: 'Analyses', title: 'Compte rendu d’analyses' });
+  const bilan = motifsOf(c).includes('bilan');
+  if (bilan) steps.push({ id: 'labs', kind: 'labs', name: 'Analyses', title: 'Compte rendu d’analyses' });
   if (f !== 'carn' || sp.group === 'faune') steps.push({ id: 'herd', kind: 'choice', name: 'Effectif', title: 'Un ou plusieurs animaux ?', options: HERD });
   steps.push({ id: 'age', kind: 'choice', name: 'Âge', title: 'Âge', norms: v?.senior ? `Considéré comme âgé à partir de ${v.senior} ans.` : undefined, options: ageOptions(c.species) });
   steps.push({ id: 'sex', kind: 'choice', name: 'Sexe', title: 'Sexe', options: sexOptions(c.species) });
@@ -278,14 +297,14 @@ export function buildSteps(c: WizardCase): Step[] {
   steps.push({ id: 'hyd', kind: 'choice', name: 'Hydratation', title: 'Hydratation', norms: 'Pli de peau qui s’efface aussitôt, œil non enfoncé, muqueuses humides.', options: HYDRATION });
   if (breedsFor(c.species).length) steps.push({ id: 'breed', kind: 'breed', name: 'Race', title: 'Race', sub: 'Prédispositions, gabarit.' });
   steps.push({ id: 'weight', kind: 'weight', name: 'Poids', title: 'Poids', sub: 'Indispensable pour calculer les doses.' });
-  if (c.motif !== 'bilan') steps.push({ id: 'labs', kind: 'labs', name: 'Analyses', title: 'Des analyses ?' });
+  if (!bilan) steps.push({ id: 'labs', kind: 'labs', name: 'Analyses', title: 'Des analyses ?' });
   return steps;
 }
 
 /** Éléments apportés par les réponses du parcours (hors signes cochés) */
 export function answerSigns(c: WizardCase): { present: string[]; absent: string[] } {
   const a = c.answers ?? {};
-  const present = new Set<string>(motifById(c.species, c.motif)?.signs ?? []);
+  const present = new Set<string>(motifSuggestions(c).preset);
   const absent = new Set<string>();
   for (const s of buildSteps(c)) {
     const ans = a[s.id];

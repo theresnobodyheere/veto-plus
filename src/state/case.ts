@@ -10,7 +10,7 @@ import { settings } from './settings';
 import { parseLabText } from '../engine/labText';
 import { breedByName } from '../data/breeds';
 import { tempFinding, hrFinding, rrFinding } from '../data/vitals';
-import { buildSteps, answerSigns, SEX_LABEL } from '../data/wizard';
+import { buildSteps, answerSigns, motifsOf, SEX_LABEL } from '../data/wizard';
 
 export type Draft = CaseRecord;
 
@@ -46,7 +46,6 @@ export function setAnswer(stepId: string, answer: string | undefined) {
   if (answer == null) delete answers[stepId];
   else answers[stepId] = answer;
   const p: Partial<Draft> = { answers };
-  if (stepId === 'motif') { p.motif = answer; p.questions = undefined; }
   if (stepId === 'age' || stepId === 'sex') {
     // Le stade ne s'applique plus (jeune, mâle) : sa réponse est retirée
     delete answers.stage;
@@ -58,6 +57,16 @@ export function setAnswer(stepId: string, answer: string | undefined) {
   // Une plage choisie remplace une valeur exacte saisie avant
   if (stepId === 'temp' || stepId === 'hr' || stepId === 'rr') p[stepId] = undefined;
   patch(p);
+}
+
+/** Ajoute ou retire un motif de consultation (plusieurs possibles) */
+export function toggleMotif(id: string) {
+  const d = draft.value;
+  if (!d) return;
+  const cur = motifsOf(d);
+  const motifs = cur.includes(id) ? cur.filter((m) => m !== id) : [...cur, id];
+  // Les questions ciblées seront recalculées d'après les nouveaux motifs
+  patch({ motifs, motif: undefined, questions: undefined });
 }
 
 /** Mesure exacte (température, FC, FR) : elle remplace la plage */
@@ -129,7 +138,7 @@ export const MIN_ANSWERS = 3;
 export const canAnalyse = computed(() => {
   const d = draft.value;
   const a = analysis.value;
-  return !!d && !!a && (!!d.motif || d.labs.length > 0) && answeredCount.value >= MIN_ANSWERS && a.findings.length >= 2;
+  return !!d && !!a && (motifsOf(d).length > 0 || d.labs.length > 0) && answeredCount.value >= MIN_ANSWERS && a.findings.length >= 2;
 });
 
 // ——— Compte rendu d'analyses (scanné avec « Analyser le texte » d'iOS, ou collé) ———

@@ -25,6 +25,8 @@ export interface CaseRecord {
   /** Signes cochés (étape des signes, « Pour affiner ») */
   signs: string[];
   /** Parcours : motif, réponses par étape, questions ciblées figées */
+  motifs?: string[];
+  /** Motif unique des cas enregistrés avant le choix multiple */
   motif?: string;
   answers?: Record<string, string>;
   questions?: { id: string; label: string; supports: string[] }[];

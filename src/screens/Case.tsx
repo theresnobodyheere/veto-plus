@@ -2,14 +2,14 @@
 // l'analyse se débloque dès qu'il y a assez de réponses et l'hypothèse en tête s'affiche en direct.
 import { useEffect, useMemo, useState } from 'preact/hooks';
 import {
-  draft, step, patch, setAnswer, setMeasure, freezeQuestions, toggleSign, setReport, setLab, removeLab,
+  draft, step, patch, setAnswer, setMeasure, freezeQuestions, toggleSign, toggleMotif, setReport, setLab, removeLab,
   analysis, persist, canAnalyse, answeredCount, MIN_ANSWERS,
 } from '../state/case';
 import { speciesById } from '../data/species';
 import { ANALYTES, analyteById, toCanonical } from '../data/analytes';
 import { SIGN_GROUPS, signLabel, type SignGroup } from '../data/signs';
 import { breedsFor } from '../data/breeds';
-import { buildSteps, motifById, answerLabel, type Step, type Option } from '../data/wizard';
+import { buildSteps, motifsOf, selectedMotifs, motifSuggestions, answerLabel, type Step, type Option } from '../data/wizard';
 import { formatValue } from '../engine/interpret';
 import { likelihood } from '../engine/ddx';
 import { searchSigns, signsForSpecies } from '../engine/textSigns';
@@ -45,7 +45,9 @@ export function Case() {
           </button>
           {/* L'animal, choisi sur l'écran d'accueil, est la question 1 */}
           <span class="wiz-name">{s.name} · {i + 2}/{steps.length + 1}</span>
-          <button class="wiz-skip" onClick={next} hidden={i === 0}>Passer</button>
+          {s.kind === 'motifs'
+            ? <button class="wiz-skip" onClick={next} hidden={!motifsOf(d).length}>Suivant</button>
+            : <button class="wiz-skip" onClick={next}>Passer</button>}
         </div>
         <div class="wiz-progress"><div style={{ width: `${Math.round(((i + 2) / (steps.length + 1)) * 100)}%` }} /></div>
         <Recap steps={steps} current={i} onJump={goTo} species={sp.label} />
@@ -70,6 +72,21 @@ function StepView({ s, pick, next, finish }: { s: Step; pick: (id: string, a: st
       {s.norms && <Norms>{s.norms}</Norms>}
     </>
   );
+
+  if (s.kind === 'motifs') {
+    const chosen = motifsOf(d);
+    return (
+      <>
+        {head}
+        <div class="opts">
+          {s.options!.map((o) => <Opt key={o.id} o={o} sel={chosen.includes(o.id)} check onClick={() => toggleMotif(o.id)} />)}
+        </div>
+        <button class="btn primary block" disabled={!chosen.length} onClick={next}>
+          {chosen.length ? `Suivant · ${chosen.length} motif${chosen.length > 1 ? 's' : ''}` : 'Choisissez au moins un motif'}
+        </button>
+      </>
+    );
+  }
 
   if (s.kind === 'choice') {
     const wide = (s.options ?? []).some((o) => (o.detail?.length ?? 0) > 28 || o.label.length > 22);
@@ -130,9 +147,11 @@ function StepView({ s, pick, next, finish }: { s: Step; pick: (id: string, a: st
   );
 }
 
-function Opt({ o, sel, onClick }: { o: Option; sel: boolean; onClick: () => void }) {
+/** check : choix multiple, une coche marque les réponses retenues */
+function Opt({ o, sel, onClick, check }: { o: Option; sel: boolean; onClick: () => void; check?: boolean }) {
   return (
-    <button class={`opt ${sel ? 'sel' : ''} ${o.normal ? 'normal' : ''} ${o.abnormal ? 'bad' : ''}`} onClick={onClick} aria-pressed={sel}>
+    <button class={`opt ${sel ? 'sel' : ''} ${o.normal ? 'normal' : ''} ${o.abnormal ? 'bad' : ''} ${check ? 'multi' : ''}`} onClick={onClick} aria-pressed={sel}>
+      {check && <span class="opt-check">{sel && <Icon name="check" size={14} />}</span>}
       <span class="opt-t">{o.label}</span>
       {o.detail && <span class="opt-d">{o.detail}</span>}
     </button>
@@ -182,9 +201,9 @@ function SignsStep({ head, next }: { head: preact.ComponentChildren; next: () =>
   const [q, setQ] = useState('');
   const all = useMemo(() => signsForSpecies(d.species), [d.species]);
   const available = new Set(all.map((x) => x.id));
-  const motif = motifById(d.species, d.motif);
-  const preset = new Set(motif?.signs ?? []);
-  const sugg = (motif?.sugg ?? []).filter((id) => available.has(id) && !preset.has(id));
+  const ms = motifSuggestions(d);
+  const preset = new Set(ms.preset);
+  const sugg = ms.sugg.filter((id) => available.has(id));
   const found = q ? searchSigns(q, d.species) : [];
   const chip = (id: string, label = signLabel(id)) => (
     <button key={id} class={`chip ${d.signs.includes(id) ? 'on' : ''}`} onClick={() => toggleSign(id)} aria-pressed={d.signs.includes(id)}>{label}</button>
@@ -254,6 +273,7 @@ function Recap({ steps, current, onJump, species }: { steps: Step[]; current: nu
     const a = d.answers?.[s.id];
     let label: string | undefined;
     if (s.kind === 'measure' && a === 'exact' && d[s.measure!] != null) label = `${s.measure === 'temp' ? '' : `${s.name} `}${fr(d[s.measure!]!)}${s.measure === 'temp' ? ' °C' : '/min'}`;
+    else if (s.kind === 'motifs') label = selectedMotifs(d).map((m) => m.label).join(' + ') || undefined;
     else if (s.kind === 'signs') label = d.signs.length ? `${d.signs.length} signe${d.signs.length > 1 ? 's' : ''}` : undefined;
     else if (s.kind === 'breed') label = d.breed;
     else if (s.kind === 'weight') label = d.weight ? `${fr(d.weight)} kg` : undefined;
@@ -281,7 +301,7 @@ function AnalyseBar({ onAnalyse }: { onAnalyse: () => void }) {
   if (ok && top) {
     const lk = likelihood(top, top.score);
     lead = <><span class="grow">En tête : <b>{top.disease.name}</b></span><span class={`lk-${lk}`}>{lk}</span></>;
-  } else if (!d.motif && !d.labs.length) lead = <span>Choisissez le motif de consultation</span>;
+  } else if (!motifsOf(d).length && !d.labs.length) lead = <span>Choisissez le motif de consultation</span>;
   else if (answeredCount.value >= MIN_ANSWERS) lead = <span>Ajoutez au moins un signe pour analyser</span>;
   else lead = <span>Encore {left} réponse{left > 1 ? 's' : ''} pour analyser</span>;
   return (

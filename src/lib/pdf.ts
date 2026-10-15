@@ -8,7 +8,7 @@ import { formatValue } from '../engine/interpret';
 import { likelihood, confidence } from '../engine/ddx';
 import { settings } from '../state/settings';
 import { departementByCode } from '../data/departements';
-import { motifById } from '../data/wizard';
+import { selectedMotifs } from '../data/wizard';
 import { treatmentFor, lineDose } from '../data/treatments';
 
 type RGB = [number, number, number];
@@ -109,11 +109,11 @@ export async function buildPdf(): Promise<Blob> {
   }
 
   // ——— Clinique : motif, signes cochés et réponses du parcours ———
-  const motif = motifById(d.species, d.motif)?.label;
+  const motifs = selectedMotifs(d).map((m) => m.label);
   const clinical = a.findings.filter((f) => !a.labFindings.includes(f));
-  if (motif || clinical.length || d.notes.trim()) {
+  if (motifs.length || clinical.length || d.notes.trim()) {
     section('Motif et signes cliniques');
-    if (motif) para(`Motif : ${motif}`, 10, 'bold');
+    if (motifs.length) para(`Motif${motifs.length > 1 ? 's' : ''} : ${motifs.join(' ; ')}`, 10, 'bold');
     if (clinical.length) para(clinical.map(signLabel).join(' · '), 10);
     if (a.absent.length) para(`Absents : ${a.absent.map(signLabel).join(' · ')}`, 9, 'normal', C.muted);
     if (d.notes.trim()) { y += 1.5; para(d.notes.trim(), 9.5, 'normal', C.muted); }
