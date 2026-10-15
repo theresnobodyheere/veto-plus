@@ -85,3 +85,15 @@ export const GESTATION: { id: string; label: string; days: number }[] = [
   { id: 'chatte', label: 'Chatte', days: 65 },
   { id: 'anesse', label: 'Ânesse', days: 365 },
 ];
+
+/**
+ * Poids estimé au ruban : tour de poitrine² × longueur / diviseur (cm → kg).
+ * Formule de Schaeffer convertie en métrique (bovins, petits ruminants : 10 840 ; porc : 14 450) ;
+ * Carroll et Huntington, Equine Vet J 1988 (cheval : 11 880). Longueur : pointe de l'épaule à la pointe de la fesse.
+ */
+export const TAPE_DIVISOR: Record<string, number> = { bovin: 10840, ovin: 10840, caprin: 10840, porc: 14450, cheval: 11880 };
+export function tapeWeight(species: string, girthCm: number, lengthCm: number): number | undefined {
+  const div = TAPE_DIVISOR[species];
+  if (!div || !(girthCm > 0) || !(lengthCm > 0)) return undefined;
+  return (girthCm * girthCm * lengthCm) / div;
+}

@@ -13,6 +13,8 @@ export interface Sign {
   species?: SpeciesId[];
   /** Mots-clés supplémentaires pour la recherche */
   kw?: string[];
+  /** Élément ajouté automatiquement (saison, toxique précisé) : absent des listes, de la recherche et des questions */
+  auto?: boolean;
 }
 
 const RUM: SpeciesId[] = ['bovin', 'ovin', 'caprin'];
@@ -109,6 +111,10 @@ export const SIGNS: Sign[] = [
   { id: 'raideur', label: 'Raideur généralisée (tétanique) / procidence de la 3e paupière', group: 'neuro', kw: ['rigide', 'tétanos', 'membrane nictitante', 'chevalet'] },
   { id: 'prurit', label: 'Prurit', group: 'peau', kw: ['démangeaisons', 'se frotte', 'se gratte', 'démange', 'se lèche', 'prurigineux', 'se gratte beaucoup', 'se mordille'] },
 
+  // Examen par espèce
+  { id: 'ileus', label: 'Bruits digestifs absents (iléus)', group: 'digestif', species: ['cheval'], kw: ['pas de bruits digestifs', 'silence digestif', 'iléus', 'bruits digestifs absents'] },
+  { id: 'anses_distendues', label: 'Palpation transrectale : anses distendues, déplacement', group: 'digestif', species: ['cheval'], kw: ['anses distendues', 'déplacement du côlon', 'accrochement néphrosplénique', 'torsion'] },
+
   // Locomoteur
   { id: 'boiterie', label: 'Boiterie', group: 'locomoteur', kw: ['boite', 'boitait', 'boiteux', 'boiterie', 'boitille', 'ne pose pas la patte', 'suppression d’appui'] },
   { id: 'pouls_digites', label: 'Pouls digités frappants / attitude campée', group: 'locomoteur', species: ['cheval', 'bovin'], kw: ['fourbure', 'campé', 'pieds chauds'] },
@@ -145,6 +151,12 @@ export const SIGNS: Sign[] = [
   { id: 'boiterie_aigue_1', label: 'Boiterie aiguë d’un seul membre, suppression d’appui', group: 'locomoteur', kw: ['ne pose plus la patte', 'ne pose pas la patte', 'suppression d’appui', 'boiterie brutale', 'boite brutalement', 'boite d’un coup', 'patte en l’air', 'sur trois pattes', 'ne pose plus le pied', 'pied chaud', 'un seul pied'] },
 
   // Contexte
+  { id: 'introduction', label: 'Achat ou introduction récente d’animaux', group: 'contexte', species: ['bovin', 'ovin', 'caprin', 'porc', 'cheval'], kw: ['achat', 'acheté', 'introduction', 'introduit', 'nouvel animal', 'nouveaux animaux', 'nouvelle génisse', 'nouveau cheval', 'marché', 'foire'] },
+  { id: 'estive', label: 'Retour d’estive, pâture commune, concours', group: 'contexte', species: ['bovin', 'ovin', 'caprin', 'cheval'], kw: ['estive', 'transhumance', 'pâture commune', 'pension', 'concours', 'rassemblement'] },
+  { id: 'contact_faune', label: 'Contact avec la faune sauvage (sangliers, blaireaux, cervidés)', group: 'contexte', species: ['bovin', 'ovin', 'caprin', 'porc'], kw: ['sanglier', 'sangliers', 'blaireau', 'blaireaux', 'cerf', 'chevreuil', 'faune sauvage'] },
+  { id: 'velage_difficile', label: 'Mise bas difficile (extraction forcée, gros veau)', group: 'repro', species: ['bovin', 'ovin', 'caprin', 'cheval'], kw: ['vêlage difficile', 'extraction forcée', 'dystocie', 'gros veau', 'veau trop gros', 'tiré le veau', 'vêlage dur'] },
+  { id: 'primipare', label: 'Primipare (génisse, 1re lactation)', group: 'contexte', species: ['bovin'], kw: ['génisse', 'primipare', 'première lactation', 'premier vêlage'] },
+  { id: 'multipare', label: '3e lactation ou plus', group: 'contexte', species: ['bovin'], kw: ['vieille vache', 'multipare', 'troisième lactation', '3e lactation'] },
   { id: 'aigu', label: 'Évolution aiguë (moins d’une semaine)', group: 'contexte', kw: ['depuis hier', 'depuis ce matin', 'depuis cette nuit', 'brutalement', 'd’un coup', 'soudain', 'soudainement', 'brutal'] },
   { id: 'chronique', label: 'Évolution chronique (plus d’un mois)', group: 'contexte', kw: ['depuis des mois', 'depuis plusieurs mois', 'depuis longtemps', 'chronique', 'depuis des semaines', 'progressivement'] },
   { id: 'neonatal', label: 'Nouveau-né (moins d’un mois)', group: 'contexte', species: ['bovin', 'ovin', 'caprin', 'porc'], kw: ['nouveau-né', 'quelques jours', 'sous la mère'] },
@@ -234,3 +246,27 @@ export const LAB_FINDINGS: Record<string, string> = {
 
 export const signLabel = (id: string): string =>
   SIGNS.find((s) => s.id === id)?.label ?? LAB_FINDINGS[id] ?? id;
+
+/** Éléments ajoutés automatiquement : saison du cas, toxique précisé à l'étape dédiée */
+export const AUTO_SIGNS: Sign[] = [
+  { id: 'printemps', label: 'Printemps', group: 'contexte', auto: true },
+  { id: 'ete', label: 'Été', group: 'contexte', auto: true },
+  { id: 'automne', label: 'Automne', group: 'contexte', auto: true },
+  { id: 'hiver', label: 'Hiver', group: 'contexte', auto: true },
+  { id: 'tox_avk', label: 'Raticide anticoagulant ingéré', group: 'contexte', auto: true },
+  { id: 'tox_antigel', label: 'Antigel (éthylène glycol) ingéré', group: 'contexte', auto: true },
+  { id: 'tox_op', label: 'Insecticide organophosphoré ou carbamate', group: 'contexte', auto: true },
+  { id: 'tox_domestique', label: 'Toxique domestique identifié', group: 'contexte', auto: true },
+  { id: 'tox_plomb', label: 'Source de plomb', group: 'contexte', auto: true },
+  { id: 'tox_erable', label: 'Graines ou plantules d’érable sycomore', group: 'contexte', auto: true },
+  { id: 'tox_senecon', label: 'Séneçon (foin, pâture)', group: 'contexte', auto: true },
+  { id: 'tox_plante', label: 'Plante toxique', group: 'contexte', auto: true },
+];
+AUTO_SIGNS.forEach((x) => SIGNS.push(x));
+
+/** Saison d'une date (hémisphère nord) */
+export function seasonOf(t: number): 'printemps' | 'ete' | 'automne' | 'hiver' {
+  const m = new Date(t).getMonth();
+  return m >= 2 && m <= 4 ? 'printemps' : m >= 5 && m <= 7 ? 'ete' : m >= 8 && m <= 10 ? 'automne' : 'hiver';
+}
+export const SEASONS = ['printemps', 'ete', 'automne', 'hiver'];

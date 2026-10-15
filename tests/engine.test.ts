@@ -170,3 +170,12 @@ describe('signes reconnus dans un texte libre', () => {
     expect(ids('chat', 'Ne vomit pas.')).toEqual([]);
   });
 });
+
+describe('poids estimé au ruban', () => {
+  it('bovin, cheval ; rien pour le chien', async () => {
+    const { tapeWeight } = await import('../src/engine/calc');
+    expect(Math.round(tapeWeight('bovin', 200, 160)!)).toBe(590);
+    expect(Math.round(tapeWeight('cheval', 185, 160)!)).toBe(461);
+    expect(tapeWeight('chien', 60, 70)).toBeUndefined();
+  });
+});

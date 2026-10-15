@@ -5,7 +5,14 @@ Conçue pour un exercice mixte : canine, bovins, ovins, caprins, équins, porcin
 
 ## Fonctions
 
-- **Saisie du cas en questions successives** : motif, âge, sexe et stade, température, signes, questions ciblées, examen, race, poids. Un choix fait passer à la suite, les valeurs normales de l’espèce sont affichées, l’hypothèse en tête s’affiche en direct
+- **Saisie du cas en questions successives** : motif, effectif du lot, âge (en semaines chez le nouveau-né de rente), sexe et stade, nombre de lactations, durée d’évolution, examen général sur un seul écran, signes, questions ciblées, toxique, prévention et traitements récents, race, poids. Un choix fait passer à la suite, les valeurs normales de l’espèce sont affichées, l’hypothèse en tête s’affiche en direct. En urgence, l’examen passe juste après le motif
+- **Une réponse normale compte** : normotherme, muqueuses roses, femelle stérilisée, animal seul… écartent les hypothèses qui en font un signe cardinal
+- **Examen général** : conscience, température, FC, FR, muqueuses, TRC, hydratation, gestes propres à l’espèce (rumen, ping, garrot ; bruits digestifs, reflux, palpation transrectale ; palpation abdominale, auscultation), douleur, état corporel
+- **Commémoratifs** tapés ou dictés : les signes reconnus dans le texte sont proposés
+- **Saison** du cas prise en compte automatiquement (piroplasmose, tétanie d’herbage, FCO, myopathie atypique…)
+- **Intoxications guidées** : toxique, délai, antidote, décontamination, lien CNITV
+- Poids **estimé au ruban** (tour de poitrine et longueur) quand il n’y a pas de bascule
+- **Sauvegarde continue** : un cas interrompu se reprend à la même étape ; **visite de suivi** du même animal avec l’évolution dans le PDF
 - Saisie des valeurs d’analyses, avec conversion d’unités
 - Interprétation, intervalles par espèce, conversions d’unités
 - **Alertes vitales** (K⁺, glycémie, Ca, Mg, lactates, Ht, BHB…)
@@ -42,7 +49,7 @@ Les mises à jour sont proposées par un bandeau « Nouvelle version disponible 
 
 - **Intervalles de référence** : Réglages → Intervalles de la clinique, pour les adapter aux automates de la clinique. 
 - **Contacts** : dans Réglages, saisir les numéros de la DDETSPP, du GDS et du laboratoire départemental. Ils restent sur l’iPhone.
-- Relire la base de maladies (`src/data/diseases.ts`), les seuils d’alerte (`src/engine/alerts.ts`) et les protocoles et posologies (`src/data/treatments.ts`).
+- Relire la base de maladies (`src/data/diseases.ts`), les seuils d’alerte (`src/engine/alerts.ts`), les protocoles et posologies (`src/data/treatments.ts`), les intoxications (`src/data/toxics.ts`) et les réponses du parcours qui écartent une hypothèse (`absent` dans `src/data/wizard.ts`).
 
 ## Développement
 

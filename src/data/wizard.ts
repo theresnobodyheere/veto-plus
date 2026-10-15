@@ -4,6 +4,7 @@
 import { speciesById, type SpeciesId } from './species';
 import { vitalsFor } from './vitals';
 import { breedsFor } from './breeds';
+import { TOXICS } from './toxics';
 
 export interface Option {
   id: string;
@@ -272,6 +273,101 @@ const CONSCIOUSNESS: Option[] = [
   { id: 'stupeur', label: 'Stupeur, coma', detail: 'réagit peu ou pas aux stimulations', signs: ['abattement', 'stupeur_coma'], abnormal: true },
 ];
 
+const PAIN: Option[] = [
+  { id: '0', label: 'Aucune', normal: true },
+  { id: '1', label: 'Légère' },
+  { id: '2', label: 'Modérée', abnormal: true },
+  { id: '3', label: 'Sévère', abnormal: true },
+];
+
+const BODY: Option[] = [
+  { id: 'maigre', label: 'Maigre', detail: 'côtes et bassin saillants', signs: ['amaigrissement'], abnormal: true },
+  { id: 'normal', label: 'Normal', normal: true },
+  { id: 'gras', label: 'Surpoids', signs: ['prise_poids'], abnormal: true },
+];
+
+/** Rangées propres à l'espèce : les gestes de l'examen qui orientent le plus */
+function familyRows(species: SpeciesId): Step[] {
+  const f = family(species);
+  const base = speciesById(species).proxy ?? species;
+  const row = (id: string, name: string, title: string, options: Option[]): Step => ({ id, kind: 'choice', name, title, options });
+  if (f === 'rum') {
+    const out = [
+      row('rumen', 'Rumen', 'Contractions ruminales (en 2 min)', [
+        { id: 'n', label: '2 ou plus', normal: true, absent: ['arret_rumination'] },
+        { id: 'hypo', label: '1', detail: 'hypomotilité' },
+        { id: 'atonie', label: 'Aucune', detail: 'atonie', signs: ['arret_rumination'], abnormal: true },
+      ]),
+      row('bouses', 'Bouses', 'Bouses', [
+        { id: 'n', label: 'Normales', normal: true, absent: ['diarrhee', 'constipation'] },
+        { id: 'diarrhee', label: 'Diarrhée', signs: ['diarrhee'], abnormal: true },
+        { id: 'rares', label: 'Rares, sèches', signs: ['constipation'], abnormal: true },
+        { id: 'sang', label: 'Sang, méléna', signs: ['diarrhee_hemorragique'], abnormal: true },
+      ]),
+    ];
+    if (base === 'bovin') out.push(
+      row('ping', 'Ping', 'Percussion-auscultation (ping)', [
+        { id: 'non', label: 'Aucun', normal: true, absent: ['ping_gauche', 'ping_droit'] },
+        { id: 'g', label: 'À gauche', signs: ['ping_gauche'], abnormal: true },
+        { id: 'd', label: 'À droite', signs: ['ping_droit'], abnormal: true },
+      ]),
+      row('garrot', 'Garrot', 'Épreuve du garrot', [
+        { id: 'neg', label: 'Négative', normal: true, absent: ['douleur_garrot'] },
+        { id: 'pos', label: 'Positive', detail: 'plainte, dos voussé', signs: ['douleur_garrot'], abnormal: true },
+      ]),
+    );
+    return out;
+  }
+  if (f === 'equ') return [
+    row('bruits', 'Bruits digestifs', 'Bruits digestifs', [
+      { id: 'n', label: 'Présents', normal: true, absent: ['ileus'] },
+      { id: 'dim', label: 'Diminués' },
+      { id: 'abs', label: 'Absents', signs: ['ileus'], abnormal: true },
+    ]),
+    row('reflux', 'Reflux', 'Sondage naso-gastrique', [
+      { id: 'non', label: 'Pas de reflux', normal: true, absent: ['reflux_gastrique'] },
+      { id: 'oui', label: 'Reflux', detail: 'plus de 2 L', signs: ['reflux_gastrique'], abnormal: true },
+    ]),
+    row('tr', 'Palpation transrectale', 'Palpation transrectale', [
+      { id: 'n', label: 'Normale', normal: true, absent: ['anses_distendues'] },
+      { id: 'impaction', label: 'Impaction', signs: ['constipation'], abnormal: true },
+      { id: 'anses', label: 'Anses distendues, déplacement', signs: ['anses_distendues'], abnormal: true },
+    ]),
+  ];
+  if (f === 'carn') return [
+    row('abdo', 'Abdomen', 'Palpation abdominale', [
+      { id: 'souple', label: 'Souple', normal: true, absent: ['douleur_abdo', 'distension_abdo'] },
+      { id: 'douleur', label: 'Douloureuse', signs: ['douleur_abdo'], abnormal: true },
+      { id: 'distendu', label: 'Distendue', signs: ['distension_abdo'], abnormal: true },
+      { id: 'vessie', label: 'Vessie dure, distendue', signs: ['anurie'], abnormal: true },
+    ]),
+    row('cardio', 'Auscultation', 'Auscultation cardiaque', [
+      { id: 'n', label: 'Normale', normal: true, absent: ['souffle', 'arythmie'] },
+      { id: 'souffle', label: 'Souffle', signs: ['souffle'], abnormal: true },
+      { id: 'arythmie', label: 'Arythmie', signs: ['arythmie'], abnormal: true },
+    ]),
+  ];
+  return [];
+}
+
+/** Toxiques proposés pour l'espèce */
+function toxOptions(species: SpeciesId): Option[] {
+  const f = family(species);
+  return TOXICS.filter((t) => t.fam.includes(f) && (t.id !== 'permethrine' || (speciesById(species).proxy ?? species) === 'chat'))
+    .map((t) => ({ id: t.id, label: t.label, signs: t.signs }));
+}
+
+const TOX_DELAY: Option[] = [
+  { id: 'h2', label: 'Moins de 2 h' }, { id: 'h6', label: '2 à 6 h' }, { id: 'plus', label: 'Plus de 6 h' }, { id: 'nsp', label: 'Ne sait pas' },
+];
+
+/** Parité de la vache : la fièvre de lait est rare avant la 3e lactation */
+const PARITY: Option[] = [
+  { id: 'l1', label: 'Génisse ou 1re lactation', signs: ['primipare'], absent: ['multipare'] },
+  { id: 'l2', label: '2e lactation', absent: ['primipare', 'multipare'] },
+  { id: 'l3', label: '3e lactation ou plus', signs: ['multipare'], absent: ['primipare'] },
+];
+
 /** Prévention et traitements récents : orientent (parasitisme, ulcère) et préviennent (antibiotique en cours) */
 function treatmentRows(species: SpeciesId): Step[] {
   return [
@@ -332,6 +428,8 @@ export interface WizardCase {
   motifs?: string[];
   answers?: Record<string, string>;
   questions?: { id: string; label: string; supports: string[] }[];
+  /** Signes cochés : « toxique » ouvre l'étape des toxiques */
+  signs?: string[];
 }
 
 /** Examen général sur un seul écran : constantes, muqueuses, hydratation */
@@ -350,6 +448,9 @@ function examStep(c: WizardCase): Step {
     { id: 'muq', kind: 'choice', name: 'Muqueuses', title: 'Muqueuses', options: MUCOUS },
     { id: 'trc', kind: 'choice', name: 'TRC', title: 'Temps de recoloration capillaire', options: CRT },
     { id: 'hyd', kind: 'choice', name: 'Hydratation', title: 'Hydratation', options: HYDRATION },
+    ...familyRows(c.species),
+    { id: 'douleur', kind: 'choice', name: 'Douleur', title: 'Douleur', options: PAIN },
+    { id: 'nec', kind: 'choice', name: 'État corporel', title: 'État corporel', options: BODY },
   ];
   return { id: 'exam', kind: 'exam', name: 'Examen', title: 'Examen général', sub: 'Touchez ce qui a été examiné, puis Suivant.', rows };
 }
@@ -378,11 +479,19 @@ export function buildSteps(c: WizardCase): Step[] {
     steps.push({ id: 'stage', kind: 'choice', name: 'Stade', title: f === 'carn' ? 'Chaleurs, gestation ou mise bas ?' : 'Stade', options: stage,
       norms: f === 'carn' ? 'Pyomètre : surtout 4 à 8 semaines après les chaleurs. Éclampsie : dans les 4 semaines qui suivent la mise bas.' : undefined });
   }
+  if (stage.length && (sp.proxy ?? c.species) === 'bovin') {
+    steps.push({ id: 'parite', kind: 'choice', name: 'Lactation', title: 'Combien de vêlages ?', options: PARITY,
+      norms: 'Fièvre de lait : surtout à partir de la 3e lactation. Paralysie obstétricale : surtout la génisse après un vêlage difficile.' });
+  }
   steps.push({ id: 'duree', kind: 'choice', name: 'Durée', title: 'Depuis quand ?', sub: 'Début des premiers signes.', options: DURATION });
   if (!urgent) steps.push(examStep(c));
   steps.push({ id: 'signs', kind: 'signs', name: 'Signes', title: 'Autres signes ?', sub: 'Touchez tout ce qui s’applique, puis Suivant.' });
   for (const q of c.questions ?? []) {
     steps.push({ id: `q:${q.id}`, kind: 'question', name: 'Question ciblée', title: questionText(q.id, q.label), sign: q.id, supports: q.supports });
+  }
+  if (c.signs?.includes('toxique') || a['q:toxique'] === 'oui' || a.tox) {
+    steps.push({ id: 'tox', kind: 'choice', name: 'Toxique', title: 'Quel toxique ?', options: toxOptions(c.species) });
+    steps.push({ id: 'toxdelai', kind: 'choice', name: 'Délai', title: 'Exposition il y a combien de temps ?', options: TOX_DELAY });
   }
   steps.push({ id: 'ttt', kind: 'exam', name: 'Traitements', title: 'Prévention et traitements récents', sub: 'Touchez ce qui est connu, puis Suivant.', rows: treatmentRows(c.species) });
   if (breedsFor(c.species).length) steps.push({ id: 'breed', kind: 'breed', name: 'Race', title: 'Race', sub: 'Prédispositions, gabarit.' });

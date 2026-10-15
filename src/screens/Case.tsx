@@ -11,6 +11,7 @@ import { SIGN_GROUPS, signLabel, type SignGroup } from '../data/signs';
 import { breedsFor } from '../data/breeds';
 import { buildSteps, motifsOf, selectedMotifs, motifSuggestions, answerLabel, type Step, type Option } from '../data/wizard';
 import { vitalsFor } from '../data/vitals';
+import { tapeWeight, TAPE_DIVISOR } from '../engine/calc';
 import { formatValue } from '../engine/interpret';
 import { likelihood } from '../engine/ddx';
 import { searchSigns, signsForSpecies, detectSigns } from '../engine/textSigns';
@@ -137,10 +138,13 @@ function StepView({ s, pick, next }: { s: Step; pick: (id: string, a: string) =>
   if (s.kind === 'breed') return <BreedStep head={head} next={next} />;
 
   if (s.kind === 'weight') {
+    const sp0 = speciesById(d.species).proxy ?? d.species;
     return (
       <>
         {head}
-        <NumberEntry unit="kg" value={d.weight} placeholder="Poids" onDone={(n) => { patch({ weight: n, answers: { ...(d.answers ?? {}), weight: 'ok' } }); next(); }} />
+        <NumberEntry unit="kg" value={d.weight} placeholder="Poids" onDone={(n) => { patch({ weight: n, weightEstimated: false, answers: { ...(d.answers ?? {}), weight: 'ok' } }); next(); }} />
+        {d.weight != null && d.weightEstimated && <p class="section-foot">Poids estimé au ruban.</p>}
+        {TAPE_DIVISOR[sp0] && <TapeEstimate species={sp0} onUse={(kg) => { patch({ weight: kg, weightEstimated: true, answers: { ...(d.answers ?? {}), weight: 'ok' } }); next(); }} />}
       </>
     );
   }
@@ -166,8 +170,8 @@ function StepView({ s, pick, next }: { s: Step; pick: (id: string, a: string) =>
 const examined = (s: Step, answers?: Record<string, string>) => (s.rows ?? []).filter((r) => answers?.[r.id]).length;
 function examLabel(s: Step, answers?: Record<string, string>) {
   const n = examined(s, answers);
-  const [verb, none] = s.id === 'exam' ? ['examiné', 'Non examiné'] : ['renseigné', 'Non renseigné'];
-  return n ? `Suivant · ${n} élément${n > 1 ? 's' : ''} ${verb}${n > 1 ? 's' : ''}` : none;
+  // Court : le bouton partage la barre avec Analyser
+  return n ? `Suivant · ${n}/${s.rows!.length}` : s.id === 'exam' ? 'Non examiné' : 'Non renseigné';
 }
 
 /** Cas collectif : effectif, malades, morts (facultatifs) */
@@ -182,6 +186,7 @@ function HerdStep({ head }: { head: preact.ComponentChildren }) {
     </label>
   );
   const rate = (n?: number) => (n != null && h.effectif ? `${Math.round((n / h.effectif) * 100)} %` : '');
+  const exposure = signsForSpecies(d.species).filter((x) => ['introduction', 'estive', 'contact_faune', 'changement_aliment', 'paturage'].includes(x.id));
   return (
     <>
       {head}
@@ -192,6 +197,16 @@ function HerdStep({ head }: { head: preact.ComponentChildren }) {
       </div>
       {!!h.effectif && (h.malades != null || h.morts != null) && (
         <Norms>{[h.malades != null && `Morbidité ${rate(h.malades)}`, h.morts != null && `mortalité ${rate(h.morts)}`].filter(Boolean).join(', ')}.</Norms>
+      )}
+      {exposure.length > 0 && (
+        <>
+          <div class="wiz-eyebrow">Contexte du lot</div>
+          <div class="chips">
+            {exposure.map((x) => (
+              <button key={x.id} class={`chip ${d.signs.includes(x.id) ? 'on' : ''}`} aria-pressed={d.signs.includes(x.id)} onClick={() => toggleSign(x.id)}>{x.label}</button>
+            ))}
+          </div>
+        </>
       )}
     </>
   );
@@ -286,6 +301,30 @@ function NumberEntry({ unit, value, placeholder, onDone }: { unit: string; value
   );
 }
 
+/** Pas de bascule : poids estimé d'après le tour de poitrine et la longueur du corps */
+function TapeEstimate({ species, onUse }: { species: string; onUse: (kg: number) => void }) {
+  const [girth, setGirth] = useState('');
+  const [len, setLen] = useState('');
+  const num = (t: string) => parseFloat(t.replace(',', '.'));
+  const kg = tapeWeight(species, num(girth), num(len));
+  const rounded = kg != null ? (kg >= 50 ? Math.round(kg / 5) * 5 : Math.round(kg)) : undefined;
+  return (
+    <details class="card tape">
+      <summary>Pas de bascule : estimer au ruban</summary>
+      <div class="herd-grid tape-grid">
+        <label class="field herd-field"><span>Tour de poitrine (cm)</span>
+          <input type="text" inputMode="decimal" placeholder="—" value={girth} onInput={(e) => setGirth(e.currentTarget.value)} /></label>
+        <label class="field herd-field"><span>Longueur (cm)</span>
+          <input type="text" inputMode="decimal" placeholder="—" value={len} onInput={(e) => setLen(e.currentTarget.value)} /></label>
+      </div>
+      <p class="fine">Tour de poitrine juste derrière les coudes ; longueur de la pointe de l’épaule à la pointe de la fesse. Estimation à ± 10 %.</p>
+      <button class="btn primary block" disabled={rounded == null} onClick={() => rounded != null && onUse(rounded)}>
+        {rounded != null ? `Utiliser ≈ ${rounded} kg` : 'Saisir les deux mesures'}
+      </button>
+    </details>
+  );
+}
+
 function MeasureStep({ s, head, pick, next }: { s: Step; head: preact.ComponentChildren; pick: (id: string, a: string) => void; next: () => void }) {
   const d = draft.value!;
   const kind = s.measure!;
@@ -317,7 +356,8 @@ function SignsStep({ head }: { head: preact.ComponentChildren }) {
     <button key={id} class={`chip ${d.signs.includes(id) ? 'on' : ''}`} onClick={() => toggleSign(id)} aria-pressed={d.signs.includes(id)}>{label}</button>
   );
   // Signes reconnus dans les commémoratifs, pas encore retenus
-  const known = new Set([...d.signs, ...ms.preset, ...analysis.value!.findings]);
+  // (ni ceux que le parcours a écartés : « gros veau » chez une vache adulte n'en fait pas un jeune)
+  const known = new Set([...d.signs, ...ms.preset, ...analysis.value!.findings, ...analysis.value!.absent]);
   const inText = useMemo(() => detectSigns(d.notes, d.species), [d.notes, d.species]).filter((x) => !known.has(x.id));
   return (
     <>
@@ -398,17 +438,22 @@ function Recap({ steps, current, onJump, species }: { steps: Step[]; current: nu
     else if (s.kind === 'weight') label = d.weight ? `${fr(d.weight)} kg` : undefined;
     else if (s.kind === 'labs') label = d.labs.length ? `${d.labs.length} valeur${d.labs.length > 1 ? 's' : ''}` : undefined;
     else if (s.kind === 'herd') label = d.herd?.malades != null ? `${d.herd.malades}${d.herd.effectif ? `/${d.herd.effectif}` : ''} malades` : undefined;
-    else if (s.id === 'trc') label = a ? `TRC ${answerLabel(s, a)}` : undefined;
-    else if (parent?.id === 'ttt') label = a ? `${s.name} : ${answerLabel(s, a)?.toLowerCase()}` : undefined;
+    // Rangées d'examen : le nom précise une réponse courte (« Aucune », « Positive »…)
+    else if (parent && !['temp', 'hr', 'rr', 'consc', 'hyd'].includes(s.id)) label = a ? `${s.name} : ${answerLabel(s, a)?.toLowerCase()}` : undefined;
     else label = answerLabel(s, a);
-    return { i, label, key: s.id };
+    // Anomalie : réponse marquée anormale, ou valeur mesurée hors des valeurs usuelles
+    const v = s.kind === 'measure' && a === 'exact' ? vitalsFor(d.species) : undefined;
+    const val = s.measure ? d[s.measure] : undefined;
+    const bad = !!s.options?.find((o) => o.id === a)?.abnormal
+      || (!!v && val != null && (val > v[s.measure!][1] || (s.measure !== 'rr' && val < v[s.measure!][0])));
+    return { i, label, key: s.id, bad };
   };
   // Examen : une pastille par élément examiné
   const items = steps.flatMap((s, i) => (s.rows ? s.rows.map((r) => one(r, i, s)) : [one(s, i)])).filter((x) => x.label && x.i !== current);
   return (
     <div class="recap">
       <button class="recap-chip" onClick={() => go('/')}>{species}</button>
-      {items.map((x) => <button key={x.key} class="recap-chip" onClick={() => onJump(x.i)}>{x.label}</button>)}
+      {items.map((x) => <button key={x.key} class={`recap-chip ${x.bad ? 'bad' : ''}`} onClick={() => onJump(x.i)}>{x.label}</button>)}
     </div>
   );
 }

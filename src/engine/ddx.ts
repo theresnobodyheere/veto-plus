@@ -1,7 +1,7 @@
 // Diagnostic différentiel local : classement pondéré des maladies selon les signes et anomalies.
 import { DISEASES, type Disease } from '../data/diseases';
 import { speciesById, type SpeciesId } from '../data/species';
-import { LAB_FINDINGS, signLabel } from '../data/signs';
+import { LAB_FINDINGS, SEASONS, signLabel } from '../data/signs';
 import { signsForSpecies } from './textSigns';
 
 export interface DdxResult {
@@ -38,7 +38,8 @@ export function rankDiseases(species: SpeciesId, findings: string[], limit = 12,
       if (present.has(fid)) { raw += w; matched.push(fid); }
       else if (w === 3 && missing.has(fid)) raw -= 1;
     }
-    if (!matched.length) continue;
+    // La saison seule ne suffit pas à proposer une maladie
+    if (!matched.some((m) => !SEASONS.includes(m))) continue;
     raw = Math.max(0, raw);
     const missingKey = !!d.key && !d.key.some((k) => present.has(k));
     let score = raw / Math.sqrt(total);

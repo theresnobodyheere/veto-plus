@@ -13,10 +13,14 @@ interface Input {
   signs?: string[]; yes?: string[]; no?: string[]; labs?: Record<string, number>; breed?: string; weight?: number;
   /** Autres réponses du parcours (durée, TRC, conscience, traitements…) */
   ans?: Record<string, string>;
+  /** Mois du cas (0 = janvier, par défaut : hiver, sans repère saisonnier) */
+  month?: number;
 }
 
 function run(species: SpeciesId, x: Input) {
   newCase(species);
+  // Date fixe : la saison du cas pèse dans le classement
+  patch({ createdAt: new Date(2026, x.month ?? 0, 15).getTime() });
   for (const m of [x.motif].flat()) toggleMotif(m);
   for (const k of ['herd', 'age', 'sex', 'stage', 'temp', 'hr', 'muq', 'hyd'] as const) if (x[k]) setAnswer(k, x[k]);
   for (const [k, v] of Object.entries(x.ans ?? {})) setAnswer(k, v);
@@ -176,6 +180,48 @@ describe('données de l’examen et de l’anamnèse', () => {
     expect(buildSteps(draft.value!).some((s) => s.id === 'herdInfo')).toBe(false);
     setAnswer('herd', 'plusieurs');
     expect(buildSteps(draft.value!).some((s) => s.id === 'herdInfo')).toBe(true);
+  });
+});
+
+describe('terrain', () => {
+  it('saison : la piroplasmose bovine monte au printemps, sans être proposée sur la saison seule', () => {
+    const winter = run('bovin', { motif: 'lait', signs: ['fievre', 'urines_foncees'] });
+    const spring = run('bovin', { motif: 'lait', signs: ['fievre', 'urines_foncees'], month: 4 });
+    const sc = (a: typeof winter) => a.ddx.find((r) => r.disease.id === 'babesiose_bovin')!.score;
+    expect(sc(spring)).toBeGreaterThan(sc(winter));
+    expect(spring.findings).toContain('printemps');
+    const onlySeason = run('cheval', { motif: 'loco', month: 9 });
+    expect(onlySeason.ddx.map((r) => r.disease.id)).not.toContain('myopathie_atypique');
+  });
+  it('vache primipare couchée après vêlage : la fièvre de lait recule, la paralysie obstétricale apparaît', () => {
+    const base = { motif: 'couche', herd: 'seul', age: 'adulte', sex: 'f', stage: 'misebas', temp: 'normal', signs: ['velage_difficile', 'paresie'] };
+    const old = run('bovin', { ...base, ans: { parite: 'l3' } });
+    const heifer = run('bovin', { ...base, ans: { parite: 'l1' } });
+    const sc = (a: typeof old, id: string) => a.ddx.find((r) => r.disease.id === id)?.score ?? 0;
+    expect(sc(heifer, 'fievre_lait')).toBeLessThan(sc(old, 'fievre_lait'));
+    expect(heifer.ddx[0].disease.id).toBe('paralysie_obstetricale');
+    expect(buildSteps(draft.value!).some((s) => s.id === 'parite')).toBe(true);
+  });
+  it('toxique coché : étapes toxique et délai ; le raticide précisé place l’intoxication aux AVK en tête', () => {
+    run('chien', { motif: 'urg', signs: ['toxique'] });
+    expect(buildSteps(draft.value!).map((s) => s.id)).toEqual(expect.arrayContaining(['tox', 'toxdelai']));
+    setAnswer('tox', 'avk');
+    expect(analysis.value!.ddx[0].disease.id).toBe('avk');
+    const chat = run('chat', { motif: 'urg', signs: ['toxique'] });
+    void chat;
+    expect(flatSteps(buildSteps(draft.value!)).find((s) => s.id === 'tox')!.options!.map((o) => o.id)).toContain('permethrine');
+  });
+  it('introduction récente d’un cheval en collectivité : gourme en tête', () => {
+    const a = run('cheval', { motif: 'resp', herd: 'plusieurs', temp: 'haut', signs: ['jetage', 'introduction'] });
+    expect(a.ddx[0].disease.id).toBe('gourme');
+  });
+  it('examen par espèce : ping à gauche saisi à l’examen → déplacement de caillette', () => {
+    const a = run('bovin', { motif: 'lait', age: 'adulte', sex: 'f', stage: 'lactation', ans: { ping: 'g', rumen: 'hypo' } });
+    expect(a.ddx[0].disease.id).toBe('dcg');
+  });
+  it('colique : reflux et anses distendues à l’examen → colique chirurgicale', () => {
+    const a = run('cheval', { motif: 'colique', hr: 'haut', ans: { reflux: 'oui', tr: 'anses', bruits: 'abs' } });
+    expect(a.ddx[0].disease.id).toBe('colique_chir');
   });
 });
 

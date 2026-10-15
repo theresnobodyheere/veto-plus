@@ -66,7 +66,7 @@ export function hasPhrase(text: string, phrase: string): boolean {
 
 export function signsForSpecies(species: SpeciesId): Sign[] {
   const fam = new Set<SpeciesId>([species, ...speciesById(species).ddx]);
-  return SIGNS.filter((s) => !s.species || s.species.some((x) => fam.has(x)));
+  return SIGNS.filter((s) => !s.auto && (!s.species || s.species.some((x) => fam.has(x))));
 }
 
 export function searchSigns(q: string, species: SpeciesId): Sign[] {

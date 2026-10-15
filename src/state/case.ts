@@ -8,6 +8,7 @@ import { computeAlerts } from '../engine/alerts';
 import { rankDiseases, discriminants } from '../engine/ddx';
 import { settings } from './settings';
 import { breedByName } from '../data/breeds';
+import { seasonOf, SEASONS } from '../data/signs';
 import { tempFinding, hrFinding, rrFinding, vitalsFor } from '../data/vitals';
 import { buildSteps, flatSteps, answerSigns, motifsOf, SEX_LABEL, NORMAL_ABSENT } from '../data/wizard';
 
@@ -25,7 +26,7 @@ export function newCase(species: SpeciesId) {
 /** Ouvre un cas enregistré ; un cas interrompu reprend à l'étape où il a été laissé */
 export function openCase(c: CaseRecord) {
   draft.value = clean = { ...c, answers: c.answers ?? {} };
-  step.value = c.finished === false ? (c.step ?? 0) : 0;
+  step.value = savedStep = c.finished === false ? (c.step ?? 0) : 0;
 }
 
 /** Visite de suivi du même animal : signalement, motifs et poids repris, examen et signes à refaire */
@@ -128,7 +129,8 @@ export const analysis = computed(() => {
   const signs = [...d.signs, ...fromAnswers.present].filter((s) => !overridden.has(s));
   // FR élevée : ajoute une dyspnée (tachypnée) ; une FR normale n'efface pas une dyspnée constatée
   const measured = [tempFinding(d.species, d.temp), hrFinding(d.species, d.hr), rrFinding(d.species, d.rr)].filter((x): x is NonNullable<typeof x> => !!x);
-  const findings = [...new Set([...signs, ...labFindings, ...breedFindings, ...measured])];
+  // Saison du cas : repère épidémiologique ajouté sans saisie
+  const findings = [...new Set([...signs, ...labFindings, ...breedFindings, ...measured, seasonOf(d.createdAt)])];
   // Une valeur mesurée dans les normes écarte les anomalies correspondantes, comme la plage « Normale »
   const normalMeasures = vitalsFor(d.species) ? ([['temp', tempFinding], ['hr', hrFinding], ['rr', rrFinding]] as const)
     .filter(([k, f]) => d[k] != null && !f(d.species, d[k])).flatMap(([k]) => NORMAL_ABSENT[k]) : [];
@@ -155,7 +157,7 @@ export const MIN_ANSWERS = 3;
 export const canAnalyse = computed(() => {
   const d = draft.value;
   const a = analysis.value;
-  return !!d && !!a && (motifsOf(d).length > 0 || d.labs.length > 0) && answeredCount.value >= MIN_ANSWERS && a.findings.length >= 2;
+  return !!d && !!a && (motifsOf(d).length > 0 || d.labs.length > 0) && answeredCount.value >= MIN_ANSWERS && a.findings.filter((f) => !SEASONS.includes(f)).length >= 2;
 });
 
 // ——— Enregistrement ———
@@ -174,6 +176,7 @@ async function save(extra: Partial<Draft> = {}) {
   const id = await saveCase(record);
   // Le cas affiché peut avoir changé pendant l'enregistrement
   const cur = draft.value;
+  if (cur === d || cur?.createdAt === d.createdAt) savedStep = record.step!;
   if (cur && cur.createdAt === d.createdAt && (cur.id !== id || extra.finished)) {
     draft.value = { ...cur, ...extra, id };
     if (cur === d) clean = draft.value;
@@ -190,12 +193,13 @@ export function persist(finished?: boolean): Promise<void> {
 // Sauvegarde continue : une saisie interrompue (appel, autre animal, appli fermée par iOS) n'est pas perdue.
 // Rien n'est enregistré avant le premier motif ou la première valeur.
 let timer: ReturnType<typeof setTimeout> | undefined;
-/** Cas tel qu'il vient d'être ouvert ou enregistré : le consulter ne le réenregistre pas */
+/** Cas tel qu'il vient d'être ouvert ou enregistré, et son étape : le consulter ne le réenregistre pas */
 let clean: Draft | null = null;
+let savedStep = 0;
 effect(() => {
   const d = draft.value;
-  void step.value;
-  if (!d || d === clean || (!motifsOf(d).length && !d.labs.length)) return;
+  const st = step.value;
+  if (!d || (d === clean && st === savedStep) || (!motifsOf(d).length && !d.labs.length)) return;
   clearTimeout(timer);
   timer = setTimeout(() => void persist(), 800);
 });

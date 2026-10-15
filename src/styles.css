@@ -557,6 +557,7 @@ hr { border: 0; height: var(--hair); background: var(--line); margin: 12px 0; }
 .recap::-webkit-scrollbar { display: none; }
 .recap-chip { flex: none; border: 0; background: var(--card); color: var(--muted); font-size: 13px; padding: 5px 10px; border-radius: 99px; }
 .recap-chip:active { opacity: 0.55; }
+.recap-chip.bad { color: var(--crit); font-weight: 600; }
 
 main.wiz { padding-bottom: calc(var(--tab-h) + env(safe-area-inset-bottom) + 150px); display: flex; flex-direction: column; gap: 14px; }
 main.wiz > .section-title { margin: 8px 0 -6px; }
@@ -608,6 +609,11 @@ main.wiz > .section-foot { margin: -8px 0 0; }
 textarea.notes { min-height: 64px; background: var(--card); }
 .refine > .fine { width: 100%; }
 
+.tape { margin-top: 14px; }
+.tape summary { color: var(--brand); font-weight: 600; min-height: 32px; display: flex; align-items: center; }
+.tape-grid { grid-template-columns: 1fr 1fr; align-items: end; margin: 10px 0 6px; }
+.tape .fine { margin: 0 0 10px; }
+.tape .herd-field input { background: var(--fill); }
 .herd-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .herd-field span { font-size: 13px; color: var(--muted); }
 .herd-field input { background: var(--card); font-size: 20px; text-align: center; }

@@ -10,7 +10,8 @@ import { go } from '../lib/router';
 import { settings } from '../state/settings';
 import { departementByCode } from '../data/departements';
 import { treatmentFor, lineDose, needsWeight } from '../data/treatments';
-import { buildSteps } from '../data/wizard';
+import { buildSteps, family } from '../data/wizard';
+import { toxicById, decontamination } from '../data/toxics';
 
 export function Result() {
   const d = draft.value;
@@ -57,6 +58,7 @@ export function Result() {
         {zoonoses.length > 0 && (
           <div class="alert attention"><b>Risque zoonotique</b><p>{zoonoses.map((r) => r.disease.name).join(', ')} : protections adaptées (gants, masque).</p></div>
         )}
+        <ToxCard />
         {d.answers?.antibio === 'oui' && (
           <div class="alert attention"><b>Antibiotique en cours</b><p>Bactériologie et antibiogramme peuvent être faussés : le signaler au laboratoire, prélever avant tout changement d’antibiotique.</p></div>
         )}
@@ -106,6 +108,7 @@ export function Result() {
           </div>
         )}
 
+        <PainCard />
         <Refine />
 
         {a.rows.length > 0 && <LabSummary />}
@@ -173,7 +176,7 @@ function Treatment({ diseaseId }: { diseaseId: string }) {
         })}
       </div>
       <p class="fine">
-        {d.weight ? `Calculé pour ${String(d.weight).replace('.', ',')} kg. ` : ''}
+        {d.weight ? `Calculé pour ${String(d.weight).replace('.', ',')} kg${d.weightEstimated ? ' (estimé au ruban : prudence avec les marges thérapeutiques étroites)' : ''}. ` : ''}
         {sp.proxy ? `Posologies de l’espèce de référence (${speciesById(sp.proxy).label.toLowerCase()}), à adapter. ` : ''}
         Vérifier chaque dose dans le RCP{sp.food ? ', ainsi que les temps d’attente viande et lait' : ''}.
       </p>
@@ -253,6 +256,52 @@ function Refine() {
             </ul>
           </>
         )}
+      </div>
+    </>
+  );
+}
+
+/** Toxique précisé : effets attendus, antidote, décontamination selon le délai */
+function ToxCard() {
+  const d = draft.value!;
+  const t = toxicById(d.answers?.tox);
+  if (!t) return null;
+  const decon = decontamination(t, d.answers?.toxdelai, family(d.species));
+  return (
+    <div class="alert critique">
+      <b>Intoxication : {t.label}</b>
+      <p>{t.effect}</p>
+      {decon && <p>{decon}</p>}
+      <p><b>Antidote, traitement :</b> {t.antidote}</p>
+      <p><a href="#/outils/reglementaire">Contacter le CNITV</a></p>
+    </div>
+  );
+}
+
+/** Analgésiques usuels par famille : liens vers les spécialités et leur RCP (pas de dose générique ici) */
+const ANALGESICS: Record<string, string[]> = {
+  carn: ['méthadone', 'buprénorphine', 'méloxicam'],
+  rum: ['méloxicam', 'kétoprofène', 'flunixine'],
+  equ: ['flunixine', 'phénylbutazone', 'butorphanol'],
+  porc: ['méloxicam', 'kétoprofène'],
+};
+
+/** Douleur modérée ou sévère à l'examen : rappel d'analgésie */
+function PainCard() {
+  const d = draft.value!;
+  const p = Number(d.answers?.douleur ?? 0);
+  if (p < 2) return null;
+  const sp = speciesById(d.species);
+  const esp = sp.proxy ?? sp.id;
+  return (
+    <>
+      <div class="section-title">Douleur {p === 3 ? 'sévère' : 'modérée'}</div>
+      <div class="card">
+        <p style="margin:0 0 8px">Analgésie à prévoir dès maintenant, réévaluer le score après traitement.
+          AINS : pas en cas de déshydratation, d’insuffisance rénale, d’ulcère ou de corticoïdes associés.</p>
+        <div class="tx-links">
+          {(ANALGESICS[family(d.species)] ?? []).map((q) => <a key={q} href={`#/medicaments?esp=${esp}&q=${encodeURIComponent(q)}`}>{q}</a>)}
+        </div>
       </div>
     </>
   );

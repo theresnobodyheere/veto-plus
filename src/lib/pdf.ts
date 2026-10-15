@@ -11,6 +11,8 @@ import { departementByCode } from '../data/departements';
 import { selectedMotifs } from '../data/wizard';
 import { treatmentFor, lineDose } from '../data/treatments';
 import { previousVisits } from '../db/db';
+import { toxicById, decontamination } from '../data/toxics';
+import { family } from '../data/wizard';
 
 type RGB = [number, number, number];
 const C = {
@@ -71,7 +73,7 @@ export async function buildPdf(): Promise<Blob> {
   const dept = departementByCode(s.departement);
   const rows: [string, string][] = [
     ['Espèce', sp.label], ['Référence', d.ref ?? ''], ['Race', d.breed ?? ''], ['Âge', d.age ?? ''], ['Sexe', d.sex ?? ''],
-    ['Poids', d.weight ? `${d.weight.toLocaleString('fr-FR')} kg` : ''],
+    ['Poids', d.weight ? `${d.weight.toLocaleString('fr-FR')} kg${d.weightEstimated ? ' (estimé au ruban)' : ''}` : ''],
     ['Température', d.temp != null ? `${d.temp.toLocaleString('fr-FR')} °C` : ''],
     ['FC', d.hr != null ? `${d.hr} /min` : ''], ['FR', d.rr != null ? `${d.rr} /min` : ''],
     ['Cas collectif', d.herd && (d.herd.effectif || d.herd.malades || d.herd.morts) ? `effectif ${d.herd.effectif ?? '?'} · malades ${d.herd.malades ?? '?'} · morts ${d.herd.morts ?? '?'}` : ''],
@@ -119,6 +121,16 @@ export async function buildPdf(): Promise<Blob> {
       for (const l of body) { doc.text(l, M + 5, ty + lh(9.5) * 0.8); ty += lh(9.5); }
       y += h + 2;
     }
+  }
+
+  // ——— Intoxication précisée ———
+  const tox = toxicById(d.answers?.tox);
+  if (tox) {
+    section(`Intoxication : ${tox.label}`);
+    para(tox.effect, 9.5);
+    const decon = decontamination(tox, d.answers?.toxdelai, family(d.species));
+    if (decon) para(decon, 9.5);
+    para(`Antidote, traitement : ${tox.antidote}`, 9.5, 'bold');
   }
 
   // ——— Clinique : motif, signes cochés et réponses du parcours ———
