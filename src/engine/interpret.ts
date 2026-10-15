@@ -11,6 +11,7 @@ export interface LabValue {
   /** valeur et unité telles que lues */
   rawValue?: number;
   rawUnit?: string;
+  /** « ia » : valeur lue par l'IA dans une version précédente (cas anciens) */
   source: 'ocr' | 'ia' | 'manuel' | 'texte';
   unitGuessed?: boolean;
   /** intervalle imprimé sur le compte rendu (unité canonique) — prioritaire */
@@ -148,7 +149,7 @@ export function deriveFindings(species: SpeciesId, rows: LabRow[]): string[] {
 }
 
 /**
- * Convertit une valeur lue (OCR/IA) en unité canonique.
+ * Convertit une valeur lue (photo, texte) en unité canonique.
  * Si l'unité est absente ou inconnue, on choisit l'unité qui place la valeur
  * le plus près de l'intervalle de référence de l'espèce.
  */

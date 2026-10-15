@@ -1,13 +1,12 @@
 import { useState } from 'preact/hooks';
-import { draft, analysis, ai, startAI, stopAI, askFollowup } from '../state/case';
+import { draft, analysis, toggleSign, persist } from '../state/case';
 import { speciesById } from '../data/species';
 import { signLabel } from '../data/signs';
 import { formatValue } from '../engine/interpret';
-import { likelihood } from '../engine/ddx';
-import { TopBar, Markdown, toast } from '../components/ui';
+import { likelihood, strength, confidence, discriminants } from '../engine/ddx';
+import { TopBar, toast } from '../components/ui';
 import { Icon } from '../components/Icon';
 import { go } from '../lib/router';
-import { online, aiAvailable } from '../state/status';
 import { settings } from '../state/settings';
 import { departementByCode } from '../data/departements';
 
@@ -58,7 +57,8 @@ export function Result() {
           <div class="alert critique"><b>Herpèsvirus B</b><p>Morsure ou griffure : laver 15 min puis appeler le 15. <a href="#/outils/faune">Protocole</a></p></div>
         )}
 
-        <div class="section-title">Diagnostic différentiel · moteur local</div>
+        <div class="section-title">Diagnostic différentiel</div>
+        {a.ddx.length > 0 && <ConfidenceNote />}
         {a.ddx.length === 0 ? (
           <div class="card empty">Ajoutez des signes cliniques ou des résultats d’analyses pour obtenir des hypothèses.</div>
         ) : (
@@ -78,7 +78,7 @@ export function Result() {
                         {r.disease.regulated && <span class="tag info">réglementé</span>}
                         {region && r.disease.zones?.includes(region) && <span class="tag">circule dans la région</span>}
                       </div>
-                      <div class="bar"><div style={{ width: `${Math.round((r.score / best) * 100)}%` }} /></div>
+                      <div class="bar"><div style={{ width: `${Math.round(strength(r) * 100)}%` }} /></div>
                     </span>
                   </summary>
                   <div class="body">
@@ -98,7 +98,7 @@ export function Result() {
           </div>
         )}
 
-        <AiPanel />
+        <Refine />
 
         {a.rows.length > 0 && <LabSummary />}
 
@@ -145,46 +145,48 @@ function LabSummary() {
   );
 }
 
-function AiPanel() {
-  const s = ai.value;
-  const [q, setQ] = useState('');
-  const hasKeys = settings.value.order.some((p) => settings.value.keys[p]);
+const CONFIDENCE_TEXT = {
+  insuffisant: 'Éléments insuffisants pour orienter : la liste ci-dessous n’est qu’indicative. Complétez avec les signes proposés plus bas.',
+  orientation: 'Orientation possible, à confirmer : recherchez les éléments proposés plus bas pour départager les hypothèses.',
+};
+
+function ConfidenceNote() {
+  const c = confidence(analysis.value!.ddx);
+  if (c === 'solide') return null;
+  return <div class={`alert ${c === 'insuffisant' ? 'attention' : 'reg'}`}><p>{CONFIDENCE_TEXT[c]}</p></div>;
+}
+
+/** Éléments qui départageraient les hypothèses : un signe touché est ajouté au cas et le classement se met à jour */
+function Refine() {
+  const d = draft.value!;
+  const a = analysis.value!;
+  if (!a.ddx.length) return null;
+  const { signs, labs } = discriminants(d.species, a.ddx, a.findings);
+  if (!signs.length && !labs.length) return null;
+  const add = (id: string) => { toggleSign(id); void persist(); };
   return (
     <>
-      <div class="section-title">Avis de l’IA{s.provider ? ` · ${s.provider}` : ''}</div>
+      <div class="section-title">Pour affiner</div>
       <div class="card">
-        {!online.value && s.status !== 'done' && <p class="muted">Hors ligne : l’avis de l’IA sera disponible au retour du réseau. Le diagnostic local ci-dessus reste utilisable.</p>}
-        {online.value && !hasKeys && !s.text && <p class="muted">Aucune clé IA configurée. <a href="#/reglages">Ajouter une clé gratuite</a></p>}
-        {s.notice && <p class="tag warn block">{s.notice}</p>}
-        {s.status === 'idle' && aiAvailable.value && (
-          <button class="btn primary block" onClick={() => startAI()}><Icon name="sparkle" />Demander l’avis de l’IA</button>
-        )}
-        {s.status === 'running' && !s.text && !s.pendingQ && (
-          <p class="row muted"><span class="spinner" /> Analyse en cours{s.provider ? ` (${s.provider})` : ''}…</p>
-        )}
-        {s.text && <Markdown text={s.text} typing={s.status === 'running' && !s.pendingQ} />}
-        {s.status === 'running' && <button class="btn small" style="margin-top:8px" onClick={stopAI}><Icon name="stop" />Arrêter</button>}
-        {s.status === 'error' && (
-          <div>
-            <p class="tag crit block">IA indisponible : {s.error}</p>
-            <button class="btn small" onClick={() => startAI()} disabled={!aiAvailable.value}><Icon name="refresh" />Réessayer</button>
-          </div>
-        )}
-        {(s.followups ?? []).map((f, i) => (
-          <div key={i} class="followup">
-            <b>{f.q}</b>
-            <Markdown text={f.a} typing={s.status === 'running' && i === (s.followups!.length - 1)} />
-          </div>
-        ))}
-        {s.status === 'done' && (
+        {signs.length > 0 && (
           <>
-            {s.model && <p class="fine">Généré par {s.provider} ({s.model}). Vérifier les informations.</p>}
-            <div class="search" style="margin-top:12px">
-              <input type="text" placeholder="Question sur ce cas" value={q} onInput={(e) => setQ(e.currentTarget.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter' && q.trim()) { void askFollowup(q); setQ(''); } }} />
-              <button class="btn small primary icon-only" disabled={!q.trim() || !online.value} onClick={() => { void askFollowup(q); setQ(''); }} aria-label="Envoyer"><Icon name="send" /></button>
+            <p class="fine" style="margin:0 0 10px">Signes à rechercher. Touchez ceux qui sont présents : le classement se met à jour.</p>
+            <div class="refine">
+              {signs.map((x) => (
+                <button key={x.id} class="chip sugg" onClick={() => add(x.id)}>
+                  <Icon name="plus" />
+                  <span><span class="refine-label">{x.label}</span><span class="refine-for">{x.supports.slice(0, 2).join(', ')}</span></span>
+                </button>
+              ))}
             </div>
-            <button class="btn ghost" onClick={() => startAI()} disabled={!aiAvailable.value}><Icon name="refresh" size={20} />Relancer l’analyse</button>
+          </>
+        )}
+        {labs.length > 0 && (
+          <>
+            <div class="label-line">Analyses utiles</div>
+            <ul class="refine-labs">
+              {labs.map((x) => <li key={x.id}>{x.label}<span class="muted"> · {x.supports.slice(0, 2).join(', ')}</span></li>)}
+            </ul>
           </>
         )}
       </div>

@@ -1,5 +1,5 @@
-// Cas en cours : saisie, lecture des photos, analyse locale et analyse IA.
-import { signal, computed, batch } from '@preact/signals';
+// Cas en cours : saisie, lecture des photos et analyse locale.
+import { signal, computed } from '@preact/signals';
 import type { CaseRecord } from '../db/db';
 import { saveCase } from '../db/db';
 import { speciesById, type SpeciesId } from '../data/species';
@@ -8,16 +8,11 @@ import { interpretLab, deriveFindings, type LabValue } from '../engine/interpret
 import { computeAlerts } from '../engine/alerts';
 import { rankDiseases } from '../engine/ddx';
 import { settings } from './settings';
-import { aiAvailable } from './status';
-import { runAI, parseJsonLoose } from '../ai/router';
-import { caseSystem, EXTRACT_SYSTEM, buildCaseText } from '../ai/prompts';
-import { departementByCode } from '../data/departements';
-import { fromAiValues, parseLabText } from '../ocr/parse';
+import { parseLabText } from '../ocr/parse';
 import { parseNotes } from '../engine/notes';
-import { blobToBase64, compressImage } from '../lib/image';
-import { PROVIDER_LABEL, type AiImage } from '../ai/providers';
+import { compressImage } from '../lib/image';
 
-/** kind « auto » : photo pas encore triée (l'IA ou la lecture hors ligne décide s'il s'agit d'analyses) */
+/** kind « auto » : photo pas encore triée (la lecture décide s'il s'agit d'analyses) */
 export interface Photo { blob: Blob; url: string; kind: 'analyse' | 'clinique' | 'auto'; read?: boolean }
 
 export interface Draft extends Omit<CaseRecord, 'photos'> {
@@ -36,13 +31,11 @@ export function newCase(species: SpeciesId) {
   draft.value = {
     createdAt: Date.now(), updatedAt: Date.now(), species, signs: [], notes: '', labs: [], photos: [],
   };
-  ai.value = { status: 'idle', text: '' };
   reading.value = { status: 'idle' };
 }
 
 export function openCase(c: CaseRecord) {
   draft.value = { ...c, photos: c.photos.map((b, i) => ({ blob: b, url: URL.createObjectURL(b), kind: c.photoKinds?.[i] ?? 'analyse', read: true })) };
-  ai.value = c.ai ? { status: 'done', text: c.ai.text, provider: c.ai.provider, model: c.ai.model, followups: c.ai.followups ?? [] } : { status: 'idle', text: '' };
   reading.value = { status: 'idle' };
 }
 
@@ -99,7 +92,7 @@ export function setNotes(notes: string) {
   next.signs = [...new Set([...manual, ...fromText])];
   auto.signs = fromText.filter((s) => !manual.includes(s));
 
-  // Valeurs : jamais au détriment d'une valeur saisie, photographiée ou lue par l'IA
+  // Valeurs : jamais au détriment d'une valeur saisie, ou photographiée
   const kept = d.labs.filter((l) => l.source !== 'texte');
   const textLabs = f.labs.filter((v) => !kept.some((l) => l.analyte === v.analyte) && !dismissed.has(`lab:${v.analyte}`));
   next.labs = [...kept, ...textLabs];
@@ -183,61 +176,34 @@ export async function readPhotos() {
   if (!todo.length) return;
   reading.value = { status: 'running', message: 'Lecture des photos…' };
   const kinds = new Map<number, Photo['kind']>();
-  let done = false;
-
-  if (aiAvailable.value) {
-    try {
-      const images: AiImage[] = await Promise.all(todo.map(async ({ p }) => ({ mime: 'image/jpeg', data: await blobToBase64(p.blob) })));
-      const res = await runAI(
-        { system: EXTRACT_SYSTEM, json: true, temperature: 0, messages: [{ role: 'user', text: `Espèce : ${d.species}. ${images.length} photo(s). Classe chaque photo et extrais toutes les valeurs des comptes rendus.`, images }] },
-        { onProvider: (p) => { reading.value = { status: 'running', message: `Lecture par ${PROVIDER_LABEL[p]}…` }; } },
-      );
-      const j = parseJsonLoose<{ photos?: string[]; valeurs?: any[]; autres?: string }>(res.text);
-      if (j) {
-        todo.forEach(({ p, i }, k) => {
-          const t = j.photos?.[k];
-          kinds.set(i, t === 'clinique' ? 'clinique' : t === 'analyse' ? 'analyse' : p.kind === 'auto' && !j.valeurs?.length ? 'clinique' : 'analyse');
-        });
-        if (j.valeurs?.length) mergeLabs(fromAiValues(j.valeurs, d.species));
-        if (j.autres) patch({ otherResults: [draft.value!.otherResults, j.autres].filter(Boolean).join('\n') });
-        done = true;
-        reading.value = { status: 'done', message: readingSummary(j.valeurs?.length ?? 0, kinds, PROVIDER_LABEL[res.provider]) };
-      }
-    } catch (e) {
-      reading.value = { status: 'running', message: `IA indisponible (${(e as Error).message}) — lecture hors ligne…` };
+  try {
+    const { ocrImage } = await import('../ocr/tesseract');
+    const values: LabValue[] = [];
+    for (const [k, { p, i }] of todo.entries()) {
+      const text = await ocrImage(p.blob, (pr) => {
+        reading.value = { status: 'running', message: `Lecture ${k + 1}/${todo.length}…`, progress: pr };
+      });
+      const found = parseLabText(text, d.species);
+      values.push(...found);
+      // Sans valeur reconnue, une photo non triée est considérée comme clinique
+      kinds.set(i, found.length || p.kind === 'analyse' ? 'analyse' : 'clinique');
     }
-  }
-
-  if (!done) {
-    try {
-      const { ocrImage } = await import('../ocr/tesseract');
-      const values: LabValue[] = [];
-      for (const [k, { p, i }] of todo.entries()) {
-        const text = await ocrImage(p.blob, (pr) => {
-          reading.value = { status: 'running', message: `Lecture hors ligne ${k + 1}/${todo.length}…`, progress: pr };
-        });
-        const found = parseLabText(text, d.species);
-        values.push(...found);
-        // Sans valeur reconnue, une photo non triée est considérée comme clinique (envoyée à l'IA avec le cas)
-        kinds.set(i, found.length || p.kind === 'analyse' ? 'analyse' : 'clinique');
-      }
-      mergeLabs(values);
-      reading.value = values.length || [...kinds.values()].includes('clinique')
-        ? { status: 'done', message: readingSummary(values.length, kinds) }
-        : { status: 'error', message: 'Aucune valeur reconnue. Photo plus nette, bien à plat, ou saisie manuelle.' };
-    } catch (e) {
-      reading.value = { status: 'error', message: `Lecture impossible : ${(e as Error).message}` };
-    }
+    mergeLabs(values);
+    reading.value = values.length || [...kinds.values()].includes('clinique')
+      ? { status: 'done', message: readingSummary(values.length, kinds) }
+      : { status: 'error', message: 'Aucune valeur reconnue. Photo plus nette, bien à plat, ou saisie manuelle.' };
+  } catch (e) {
+    reading.value = { status: 'error', message: `Lecture impossible : ${(e as Error).message}` };
   }
   const photos = draft.value!.photos.map((p, i) => (kinds.has(i) ? { ...p, kind: kinds.get(i)!, read: true } : p));
   patch({ photos });
 }
 
-function readingSummary(values: number, kinds: Map<number, Photo['kind']>, provider?: string): string {
+function readingSummary(values: number, kinds: Map<number, Photo['kind']>): string {
   const clin = [...kinds.values()].filter((k) => k === 'clinique').length;
   const parts = [
-    values ? `${values} valeur${values > 1 ? 's' : ''} lue${values > 1 ? 's' : ''}${provider ? ` par ${provider}` : ' hors ligne'} — vérifiez-les` : '',
-    clin ? `${clin} photo${clin > 1 ? 's' : ''} clinique${clin > 1 ? 's' : ''}, jointe${clin > 1 ? 's' : ''} à l’avis de l’IA` : '',
+    values ? `${values} valeur${values > 1 ? 's' : ''} lue${values > 1 ? 's' : ''} — vérifiez-les` : '',
+    clin ? `${clin} photo${clin > 1 ? 's' : ''} clinique${clin > 1 ? 's' : ''}, conservée${clin > 1 ? 's' : ''} avec le cas` : '',
   ].filter(Boolean);
   return `${parts.join(' · ')}.`;
 }
@@ -252,92 +218,10 @@ export async function persist() {
   const record: CaseRecord = {
     ...rest,
     photos: photos.map((p) => p.blob),
-    // Une photo encore « à trier » à l'enregistrement est gardée comme clinique : elle accompagnera l'avis de l'IA
+    // Une photo encore « à trier » à l'enregistrement est gardée comme clinique
     photoKinds: photos.map((p) => (p.kind === 'analyse' ? 'analyse' : 'clinique')),
-    ai: ai.value.status === 'done' && ai.value.provider
-      ? { text: ai.value.text, provider: ai.value.provider, model: ai.value.model ?? '', at: Date.now(), followups: ai.value.followups }
-      : d.ai,
     summary: { top: a.ddx[0]?.disease.name, alerts: a.alerts.length, critical: a.alerts.filter((x) => x.level === 'critique').length },
   };
   const id = await saveCase(record);
   if (!d.id) patch({ id });
-}
-
-// ——— Analyse IA ———
-
-export interface AiState {
-  status: 'idle' | 'running' | 'done' | 'error';
-  text: string;
-  provider?: string;
-  model?: string;
-  error?: string;
-  notice?: string;
-  followups?: { q: string; a: string }[];
-  pendingQ?: string;
-}
-export const ai = signal<AiState>({ status: 'idle', text: '' });
-let aiCtrl: AbortController | null = null;
-
-async function clinicalImages(): Promise<AiImage[]> {
-  const d = draft.value!;
-  const clin = d.photos.filter((p) => p.kind === 'clinique').slice(0, 4);
-  return Promise.all(clin.map(async (p) => ({ mime: 'image/jpeg', data: await blobToBase64(p.blob) })));
-}
-
-function caseText(): string {
-  const d = draft.value!;
-  const a = analysis.value!;
-  return buildCaseText({ species: d.species, age: d.age, sex: d.sex, weight: d.weight, herd: d.herd, signs: d.signs, notes: d.notes, rows: a.rows, ddx: a.ddx, alerts: a.alerts, otherResults: d.otherResults });
-}
-
-export async function startAI() {
-  if (!draft.value || !analysis.value) return;
-  aiCtrl?.abort();
-  aiCtrl = new AbortController();
-  ai.value = { status: 'running', text: '', followups: [] };
-  try {
-    const images = await clinicalImages();
-    const res = await runAI(
-      { system: caseSystem(departementByCode(settings.value.departement)), messages: [{ role: 'user', text: caseText(), images }] },
-      {
-        signal: aiCtrl.signal,
-        onProvider: (p, model) => { ai.value = { ...ai.value, provider: PROVIDER_LABEL[p], model }; },
-        onDelta: (text) => { ai.value = { ...ai.value, text }; },
-        onReset: (reason) => { ai.value = { ...ai.value, text: '', notice: reason }; },
-      },
-    );
-    ai.value = { ...ai.value, status: 'done', text: res.text, provider: PROVIDER_LABEL[res.provider], model: res.model };
-    await persist();
-  } catch (e) {
-    ai.value = { ...ai.value, status: 'error', error: (e as Error).message };
-  }
-}
-
-export async function askFollowup(q: string) {
-  if (!q.trim() || ai.value.status !== 'done') return;
-  const prev = ai.value;
-  const history = [
-    { role: 'user' as const, text: caseText() },
-    { role: 'assistant' as const, text: prev.text },
-    ...(prev.followups ?? []).flatMap((f) => [{ role: 'user' as const, text: f.q }, { role: 'assistant' as const, text: f.a }]),
-    { role: 'user' as const, text: q },
-  ];
-  batch(() => { ai.value = { ...prev, status: 'running', pendingQ: q }; });
-  aiCtrl = new AbortController();
-  try {
-    let partial = '';
-    const res = await runAI({ system: caseSystem(departementByCode(settings.value.departement)).split('Format Markdown')[0] + 'Réponds brièvement à la question de suivi, en Markdown.', messages: history }, {
-      signal: aiCtrl.signal,
-      onDelta: (t) => { partial = t; ai.value = { ...ai.value, notice: undefined, followups: [...(prev.followups ?? []), { q, a: partial }] }; },
-      onReset: (reason) => { ai.value = { ...ai.value, notice: reason }; },
-    });
-    ai.value = { ...prev, status: 'done', pendingQ: undefined, followups: [...(prev.followups ?? []), { q, a: res.text }] };
-    await persist();
-  } catch (e) {
-    ai.value = { ...prev, status: 'done', pendingQ: undefined, notice: `Question non traitée : ${(e as Error).message}` };
-  }
-}
-
-export function stopAI() {
-  aiCtrl?.abort();
 }

@@ -35,4 +35,36 @@ describe('lecture du commentaire', () => {
     expect(f.labs.map((l) => l.analyte)).toEqual(expect.arrayContaining(['ca', 'mg']));
     expect(f.weight).toBeUndefined();
   });
+
+  it('formes dérivées, vocabulaire courant, température normale non comptée comme fièvre', () => {
+    const f = parseNotes('10 ans, setter anglais, non stérilise, apathique, anorexique, 38,5 temperature, gros ventre', 'chien');
+    expect(f.age).toBe('10 ans');
+    expect(f.sex).toBe('Mâle');
+    expect(f.temp).toBe(38.5);
+    expect(f.signs).toEqual(expect.arrayContaining(['abattement', 'anorexie', 'distension_abdo', 'grand_chien', 'age', 'male']));
+    expect(f.signs).not.toContain('fievre');
+    expect(f.signs).not.toContain('femelle_entiere');
+  });
+  it('température et fréquence cardiaque chiffrées selon l’espèce', () => {
+    expect(parseNotes('Chienne entière, chaleurs il y a 1 mois, abattue, T 40,2', 'chien').signs).toEqual(expect.arrayContaining(['fievre', 'femelle_entiere']));
+    expect(parseNotes('vache couchée, a vêlé hier, T° 37,2, ne rumine plus', 'bovin').signs).toEqual(expect.arrayContaining(['hypothermie', 'decubitus', 'mise_bas_recente', 'arret_rumination']));
+    const h = parseNotes('jument coliques depuis ce matin, se roule, FC 64, pas de diarrhée', 'cheval');
+    expect(h.hr).toBe(64);
+    expect(h.signs).toEqual(expect.arrayContaining(['douleur_abdo', 'tachycardie']));
+    expect(h.signs).not.toContain('diarrhee');
+  });
+  it('négation locale : « ni », « pas de », sans effacer le reste de la phrase', () => {
+    const f = parseNotes('pas de vomissements ni diarrhée, toux sèche depuis 1 semaine', 'chien');
+    expect(f.signs).toEqual(['toux']);
+  });
+  it('pièges : mort-aux-rats, « boit » ≠ boiterie, « sang » ≠ sanglier', () => {
+    const f = parseNotes('a mangé de la mort-aux-rats, boit beaucoup', 'chien');
+    expect(f.signs).toEqual(expect.arrayContaining(['toxique', 'pupd']));
+    expect(f.signs).not.toContain('mort_subite');
+    expect(f.signs).not.toContain('boiterie');
+    expect(parseNotes('chasse au sanglier', 'chien').signs).not.toContain('diarrhee_hemorragique');
+  });
+  it('faute de frappe sur un mot long', () => {
+    expect(parseNotes('chat très létargique, vomissemnts', 'chat').signs).toEqual(expect.arrayContaining(['abattement', 'vomissements']));
+  });
 });

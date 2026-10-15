@@ -4,7 +4,6 @@ import { TopBar, Chevron } from '../components/ui';
 import { newCase, openCase } from '../state/case';
 import { go } from '../lib/router';
 import { db, type CaseRecord } from '../db/db';
-import { settings } from '../state/settings';
 
 export function Home() {
   const [recent, setRecent] = useState<CaseRecord[]>([]);
@@ -15,17 +14,10 @@ export function Home() {
     { title: 'Rurale et équine', ids: ['bovin', 'ovin', 'caprin', 'cheval', 'porc'] },
     { title: 'Faune et parc animalier', ids: ['macaque', 'ours', 'loup', 'lynx', 'bison', 'cervide', 'bouquetin', 'sanglier'] },
   ];
-  const s = settings.value;
   return (
     <>
       <TopBar title="Nouveau cas" large />
       <main>
-        {!s.keys.gemini && !s.keys.mistral && (
-          <div class="alert reg">
-            <b>IA non configurée</b>
-            <p>Véto+ fonctionne sans IA grâce au moteur local. Pour une lecture plus fine des photos et des synthèses, ajoutez une clé gratuite dans <a href="#/reglages">Réglages</a>.</p>
-          </div>
-        )}
         {groups.map((g) => (
           <section key={g.title}>
             <div class="section-title">{g.title}</div>

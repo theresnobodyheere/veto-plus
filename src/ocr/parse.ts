@@ -1,6 +1,6 @@
 // Analyse le texte d'un compte rendu d'analyses (OCR) pour en extraire les valeurs.
 // Reconnaît les abréviations IDEXX (Catalyst, ProCyte), Scil/Exigo, VetScan, Fuji et des laboratoires.
-import { ANALYTES, normalizeUnit, analyteById, type Analyte } from '../data/analytes';
+import { ANALYTES, normalizeUnit, type Analyte } from '../data/analytes';
 import type { SpeciesId } from '../data/species';
 import { readValue, type LabValue } from '../engine/interpret';
 
@@ -99,23 +99,4 @@ export function parseLabText(text: string, species: SpeciesId): ParsedLine[] {
     }
   }
   return [...found.values()];
-}
-
-/** Valeurs renvoyées par l'IA (JSON) -> LabValue, avec la même logique de conversion */
-export function fromAiValues(items: { analyte: string; valeur: number; unite?: string; min?: number; max?: number }[], species: SpeciesId): LabValue[] {
-  const out: LabValue[] = [];
-  for (const it of items) {
-    const a = analyteById(it.analyte) ?? ANALYTES.find((x) =>
-      x.aliases.some((al) => al.toLowerCase() === String(it.analyte).toLowerCase()) ||
-      (x.exact ?? []).includes(String(it.analyte)));
-    if (!a || typeof it.valeur !== 'number') continue;
-    const conv = readValue(a.id, it.valeur, it.unite, species);
-    if (!conv) continue;
-    const f = conv.value / (it.valeur || 1);
-    out.push({
-      analyte: a.id, value: conv.value, rawValue: it.valeur, rawUnit: it.unite, source: 'ia', unitGuessed: conv.guessed,
-      reportRange: it.min != null && it.max != null && it.max > it.min && it.valeur !== 0 ? [it.min * f, it.max * f] : undefined,
-    });
-  }
-  return out;
 }

@@ -11,15 +11,9 @@ Testeur : ……………………… Date : ……/……/…… Version (Régl
 2. Toucher **Partager**, puis **Sur l’écran d’accueil**, puis **Ajouter**.
 3. Ouvrir Véto+ depuis l’écran d’accueil et attendre 30 secondes : tout est téléchargé (environ 20 Mo). L’appli fonctionne ensuite sans réseau.
 
-## 2. Créer les clés IA gratuites (facultatif, 5 min)
+## 2. Dictée (facultatif)
 
-L’appli fonctionne sans IA. L’IA améliore la lecture des photos et ajoute un avis argumenté.
-
-- **Mistral** (entreprise française) : console.mistral.ai/api-keys → si la console demande de « passer à un plan supérieur » : **Mettre à niveau** → offre gratuite **Experiment** (vérification par téléphone, sans carte bancaire ; ne pas choisir Scale, payante) → **API Keys** → **Create new key** → copier. Avec l’offre gratuite, les données envoyées peuvent servir à entraîner les modèles de Mistral.
-- **Google Gemini** (le meilleur pour lire les photos) : aistudio.google.com/apikey → **Create API key** → copier. Avec l’offre gratuite, Google peut utiliser les données envoyées.
-- Dans Véto+ : **Réglages** → coller la clé → **Tester**. Un message vert indique le modèle trouvé.
-
-Ce qui part vers l’IA : valeurs, signes, commentaire et photos. La voix n’est jamais envoyée à l’IA (dictée du clavier iOS). Jamais la référence de l’animal. **Ne dites ni n’écrivez de nom de propriétaire.**
+Tout est calculé sur l’iPhone : rien n’est envoyé sur Internet. **N’écrivez pas de nom de propriétaire** dans le commentaire (il figure dans le PDF).
 
 Dictée : touchez le champ de texte, puis la touche micro en bas à droite du clavier, et parlez (si elle n’apparaît pas : Réglages de l’iPhone → Général → Clavier → Activer la dictée). Le texte s’écrit au fur et à mesure, avec ou sans réseau.
 
@@ -31,7 +25,7 @@ Dictée : touchez le champ de texte, puis la touche micro en bas à droite du cl
 | 2 | **Vache couchée après vêlage** | Cas → Bovin → signes « Décubitus » + « Mise bas récente » ; ajouter calcémie, Mg, P, BHB si disponibles → **Analyser** | Fièvre de lait en tête ? Alerte vitale si Ca très bas ? Diagnostics différentiels pertinents (paralysie obstétricale, mammite colibacillaire…) ? Temps d’attente des produits proposés dans Médicaments ? |
 | 3 | **Chien qui vomit avec bilan rénal** | Cas → Chien → « Vomissements », « Anorexie », « PUPD » ; saisir urée, créatinine, phosphore, K⁺ (ou photo) ; essayer la **dictée** (micro du clavier) dans le commentaire | IRA/MRC, intoxication, Addison proposés ? Alerte si K⁺ élevé ? Interprétation de l’atteinte rénale cohérente ? La dictée fonctionne-t-elle ? |
 | 4 | **Colique de cheval** | Cas → Équidé → « Douleur abdominale », « Tachycardie », lactates si disponibles ; Outils → **Fluidothérapie** pour 500 kg | Classement des causes de colique logique ? Seuils lactates / FC pertinents ? Calcul des fluides juste ? |
-| 5 | **Mode avion** | Activer le mode avion, rouvrir Véto+, refaire le scénario 2 ; chercher un médicament ; générer le **PDF** et le partager | Bandeau « Hors ligne » visible ? Diagnostic, médicaments et calculateurs disponibles ? PDF lisible et partageable (Mail, AirDrop) ? |
+| 5 | **Mode avion** | Activer le mode avion, rouvrir Véto+, refaire le scénario 2 ; chercher un médicament ; générer le **PDF** et le partager | Diagnostic, médicaments et calculateurs disponibles ? PDF lisible et partageable (Mail, AirDrop) ? |
 
 Pour chaque scénario, noter aussi : lisibilité en plein jour et la nuit (mode sombre), taille du texte, rapidité.
 

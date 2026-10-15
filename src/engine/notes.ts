@@ -1,23 +1,26 @@
-// Lecture du commentaire libre (saisi ou dicté) : poids, âge, sexe, effectifs, signes cliniques et valeurs d'analyses.
-// Les éléments niés (« pas de fièvre », « sans diarrhée ») ne sont pas retenus.
+// Lecture du commentaire libre (saisi ou dicté) : poids, âge, sexe, effectifs, température, fréquence cardiaque,
+// signes cliniques et valeurs d'analyses. Les éléments niés (« pas de fièvre », « sans diarrhée ») ne sont pas retenus.
 import type { SpeciesId } from '../data/species';
 import type { Herd } from '../db/db';
 import type { LabValue } from './interpret';
 import { parseLabText } from '../ocr/parse';
 import { matchSigns, norm } from './textSigns';
+import { vitalsFor } from '../data/vitals';
 
 export interface NotesFacts {
   weight?: number;
   age?: string;
   sex?: string;
   herd?: Herd;
+  /** Température rectale (°C) et fréquence cardiaque (/min) lues dans le texte */
+  temp?: number;
+  hr?: number;
   signs: string[];
   labs: LabValue[];
 }
 
 const NUM = '(\\d+(?:[.,]\\d+)?)';
 const toNum = (s: string) => parseFloat(s.replace(',', '.'));
-const NEGATION = /\b(pas d|pas de|plus de|sans|absence d|aucune?|ni|non|ne [a-z]+ pas|n [a-z]+ pas|ne [a-z]+ plus|n [a-z]+ plus|rien)\b/;
 
 /** Propositions du texte : phrases, puis morceaux séparés par « ; », « , » ou « et » */
 function clauses(text: string): string[] {
@@ -44,11 +47,25 @@ export function parseNotes(text: string, species: SpeciesId): NotesFacts {
     break;
   }
 
-  // Sexe
-  if (/\b(sterilisee|ovariectomisee|ovariohysterectomisee)\b/.test(t)) facts.sex = 'Femelle stérilisée';
-  else if (/\b(castre|hongre)\b/.test(t)) facts.sex = 'Mâle castré';
-  else if (/\b(femelle|chienne|chatte|vache|genisse|brebis|agnelle|chevre|chevrette|jument|pouliche|ponette|truie|cochette|anesse)\b/.test(t)) facts.sex = 'Femelle';
-  else if (/\b(male|taureau|taurillon|belier|bouc|etalon|verrat|baudet)\b/.test(t)) facts.sex = 'Mâle';
+  // Sexe : « non stérilisé(e) », « entier / entière » désignent un animal non opéré
+  const entire = /\b(?:non|pas)\s+(?:sterilisee?|castree?|operee?)\b|\bentiere?\b/.test(t);
+  const female = /\b(femelle|chienne|chatte|vache|genisse|brebis|agnelle|chevre|chevrette|jument|pouliche|ponette|truie|cochette|anesse|entiere)\b/.test(t)
+    || /\b(?:non|pas)\s+(?:sterilisee|castree|operee)\b/.test(t);
+  const male = /\b(male|taureau|taurillon|belier|bouc|etalon|verrat|baudet|matou|entier)\b/.test(t) || /\b(?:non|pas)\s+(?:sterilise|castre|opere)\b/.test(t);
+  if (!entire && /\b(sterilisee|ovariectomisee|ovariohysterectomisee)\b/.test(t)) facts.sex = 'Femelle stérilisée';
+  else if (!entire && /\b(castre|hongre|sterilise)\b/.test(t)) facts.sex = 'Mâle castré';
+  else if (female) facts.sex = 'Femelle';
+  else if (male) facts.sex = 'Mâle';
+
+  // Température : « T 39,8 », « 39,8 °C », « 38,5 de température », « température à 40 »
+  const temp = t.match(/\b(?:temperature|temp|t)\s*°?\s*(?:rectale\s*)?(?:de|a|:|=)?\s*(\d{2}(?:[.,]\d{1,2})?)\b/)
+    ?? t.match(/\b(\d{2}(?:[.,]\d{1,2})?)\s*(?:°\s*c?|degres?(?:\s*c\b)?)?\s*(?:de\s*)?(?:temperature|temp\b|t\b|rectale)/)
+    ?? t.match(/\b(\d{2}(?:[.,]\d{1,2})?)\s*(?:°|degres?\b)/);
+  if (temp && toNum(temp[1]) >= 30 && toNum(temp[1]) <= 45) facts.temp = toNum(temp[1]);
+
+  // Fréquence cardiaque : « FC 180 », « pouls à 60 », « 120 bpm »
+  const hr = t.match(/\b(?:fc|frequence cardiaque|pouls|coeur|rythme cardiaque)\s*(?:a|de|:|=)?\s*(\d{2,3})\b/) ?? t.match(/\b(\d{2,3})\s*(?:bpm|battements)\b/);
+  if (hr) facts.hr = parseInt(hr[1]);
 
   // Cas collectif : « 12 malades », « 3 morts », « troupeau de 80 », « sur 120 »
   const herd: Herd = {};
@@ -60,11 +77,11 @@ export function parseNotes(text: string, species: SpeciesId): NotesFacts {
   if (size) herd.effectif = Math.round(toNum(size[1]));
   if (Object.keys(herd).length) facts.herd = herd;
 
-  // Signes et valeurs, proposition par proposition, en écartant les négations
+  // Signes et valeurs, proposition par proposition (les négations sont écartées par matchSigns)
   const signs = new Set<string>();
   const labs = new Map<string, LabValue>();
   for (const c of clauses(text)) {
-    if (!NEGATION.test(` ${norm(c).replace(/[^a-z0-9]+/g, ' ')} `)) for (const s of matchSigns(c, species)) signs.add(s);
+    for (const s of matchSigns(c, species)) signs.add(s);
     for (const v of parseLabText(c, species)) {
       if (labs.has(v.analyte)) continue;
       // Sans unité écrite, la valeur est prise dans l'unité de l'appli (SI) : « glycémie 2,1 » = 2,1 mmol/L, jamais 2,1 g/L
@@ -72,7 +89,35 @@ export function parseNotes(text: string, species: SpeciesId): NotesFacts {
       labs.set(v.analyte, { ...v, ...(noUnit ? { value: v.rawValue!, unitGuessed: true } : {}), source: 'texte' });
     }
   }
+  // Mesures et signalement : la valeur chiffrée prime sur les mots
+  const v = vitalsFor(species);
+  if (v && facts.temp != null) {
+    signs.delete('fievre'); signs.delete('hypothermie');
+    if (facts.temp > v.temp[1]) signs.add('fievre');
+    else if (facts.temp < v.temp[0]) signs.add('hypothermie');
+  }
+  if (v && facts.hr != null) {
+    if (facts.hr > v.hr[1]) signs.add('tachycardie');
+    else if (facts.hr < v.hr[0]) signs.add('bradycardie');
+  }
+  const months = facts.age ? ageInMonths(facts.age) : undefined;
+  if (v && months != null) {
+    if (v.senior && months >= v.senior * 12) signs.add('age');
+    if (months < v.young) signs.add('jeune');
+  }
+  if (facts.sex?.startsWith('Mâle')) signs.add('male');
+  // « non stérilisé » (mâle) ressemble à « non stérilisée » : le sexe lu tranche
+  if (facts.sex && facts.sex !== 'Femelle') signs.delete('femelle_entiere');
+
   facts.signs = [...signs];
   facts.labs = [...labs.values()];
   return facts;
+}
+
+/** « 8 ans », « 3 mois », « 2 sem. », « 10 j » → mois */
+function ageInMonths(age: string): number | undefined {
+  const m = age.match(/^([\d.,]+)\s*(ans?|mois|sem|j)/);
+  if (!m) return undefined;
+  const n = toNum(m[1]);
+  return m[2].startsWith('an') ? n * 12 : m[2] === 'mois' ? n : m[2] === 'sem' ? n / 4.3 : n / 30;
 }

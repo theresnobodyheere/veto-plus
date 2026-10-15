@@ -1,11 +1,11 @@
 // Rapport PDF du cas, partagé via la feuille de partage iOS (ou téléchargé).
 // Présentation alignée sur l'appli : titres de section discrets, encadrés gris clair, filets fins, couleurs système.
 import { jsPDF } from 'jspdf';
-import { draft, analysis, ai } from '../state/case';
+import { draft, analysis } from '../state/case';
 import { speciesById } from '../data/species';
 import { signLabel } from '../data/signs';
 import { formatValue } from '../engine/interpret';
-import { likelihood } from '../engine/ddx';
+import { likelihood, confidence } from '../engine/ddx';
 import { settings } from '../state/settings';
 import { departementByCode } from '../data/departements';
 
@@ -25,7 +25,6 @@ export const safe = (s: string) => s
   .replace(/\p{Extended_Pictographic}/gu, '')
   .replace(/[^\x00-\xFF’‘“”–—…€•]/g, '');
 
-const inlinePlain = (s: string) => s.replace(/\*\*(.+?)\*\*/g, '$1').replace(/\*(.+?)\*/g, '$1').replace(/`/g, '');
 
 export async function buildPdf(): Promise<Blob> {
   const d = draft.value!;
@@ -139,8 +138,10 @@ export async function buildPdf(): Promise<Blob> {
 
   // ——— Diagnostic différentiel ———
   if (a.ddx.length) {
-    section('Diagnostic différentiel · moteur local');
+    section('Diagnostic différentiel');
     const best = a.ddx[0].score;
+    const conf = confidence(a.ddx);
+    if (conf !== 'solide') para(conf === 'insuffisant' ? 'Éléments insuffisants pour orienter : liste indicative.' : 'Orientation à confirmer.', 9, 'normal', C.warn);
     a.ddx.slice(0, 8).forEach((r, i) => {
       ensure(14);
       // Filet entre deux hypothèses, sauf en haut d'une nouvelle page
@@ -153,26 +154,6 @@ export async function buildPdf(): Promise<Blob> {
       para(`Examens à envisager : ${r.disease.tests.join(' ; ')}`, 9, 'normal', C.muted, M + 7);
       if (r.disease.regulated) para(`Réglementation : ${r.disease.regulated}`, 9, 'normal', C.info, M + 7);
     });
-  }
-
-  // ——— Avis de l'IA : Markdown rendu en titres, paragraphes et listes ———
-  const md = (text: string) => {
-    for (const raw of text.split('\n')) {
-      const line = raw.trimEnd();
-      let m: RegExpMatchArray | null;
-      if (!line.trim()) { y += 1.2; continue; }
-      if ((m = line.match(/^#{1,4}\s+(.*)$/))) { y += 1.5; ensure(10); para(inlinePlain(m[1]), 10, 'bold'); y += 0.5; }
-      else if ((m = line.match(/^\s*[-*•]\s+(.*)$/))) { ensure(5); font(9.5); doc.text('•', M + 1.5, y + lh(9.5) * 0.8); para(inlinePlain(m[1]), 9.5, 'normal', C.text, M + 5); }
-      else if ((m = line.match(/^\s*(\d+)[.)]\s+(.*)$/))) { ensure(5); font(9.5); doc.text(`${m[1]}.`, M + 1, y + lh(9.5) * 0.8); para(inlinePlain(m[2]), 9.5, 'normal', C.text, M + 5); }
-      else para(inlinePlain(line), 9.5);
-    }
-  };
-  if (ai.value.text) {
-    section(`Avis de l’IA${ai.value.provider ? ` · ${ai.value.provider}` : ''}`);
-    md(ai.value.text);
-    for (const f of ai.value.followups ?? []) { y += 2; ensure(10); para(f.q, 10, 'bold'); md(f.a); }
-    y += 1;
-    para(`Généré par ${ai.value.provider ?? 'l’IA'}${ai.value.model ? ` (${ai.value.model})` : ''}. Informations à vérifier.`, 8, 'normal', C.muted);
   }
 
   // ——— Pied de page sur chaque page ———

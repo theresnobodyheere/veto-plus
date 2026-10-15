@@ -10,7 +10,7 @@ export interface CaseRecord {
   createdAt: number;
   updatedAt: number;
   species: SpeciesId;
-  /** Référence de l'animal ou de l'élevage : reste sur l'appareil, jamais envoyée à l'IA */
+  /** Référence de l'animal ou de l'élevage : reste sur l'appareil */
   ref?: string;
   age?: string;
   sex?: string;
@@ -24,7 +24,6 @@ export interface CaseRecord {
   photos: Blob[];
   /** Type de chaque photo (même ordre que photos) ; absent dans les cas enregistrés avant cette version */
   photoKinds?: ('analyse' | 'clinique')[];
-  ai?: { text: string; provider: string; model: string; at: number; followups?: { q: string; a: string }[] };
   summary?: { top?: string; alerts: number; critical: number };
 }
 

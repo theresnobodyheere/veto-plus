@@ -1,20 +1,13 @@
-// Réglages persistants (localStorage) : clés IA, modèles, intervalles de la clinique, contacts.
+// Réglages persistants (localStorage) : intervalles de la clinique, contacts, département.
 import { signal, effect } from '@preact/signals';
 import type { RangeTable } from '../data/ranges';
 import type { SpeciesId } from '../data/species';
 import { departementByCode, type Departement, type Region } from '../data/departements';
 
-export type ProviderId = 'gemini' | 'mistral';
-
 /** custom : libellé modifié par l'utilisateur, à ne plus adapter automatiquement au département */
 export interface Contact { id: string; label: string; phone: string; note?: string; custom?: boolean }
 
 export interface Settings {
-  keys: Record<ProviderId, string>;
-  /** Modèles choisis automatiquement (texte / vision) et date de détection */
-  models: Partial<Record<ProviderId, { text: string; vision: string; checkedAt: number }>>;
-  order: ProviderId[];
-  aiEnabled: boolean;
   customRanges: Partial<Record<SpeciesId, RangeTable>>;
   contacts: Contact[];
   clinicName: string;
@@ -59,10 +52,6 @@ export function setDepartement(code: string | null) {
 }
 
 const DEFAULTS: Settings = {
-  keys: { gemini: '', mistral: '' },
-  models: {},
-  order: ['gemini', 'mistral'],
-  aiEnabled: true,
   customRanges: {},
   contacts: DEFAULT_CONTACTS,
   clinicName: '',
@@ -76,12 +65,9 @@ function load(): Settings {
   try {
     const raw = localStorage.getItem(KEY);
     if (!raw) return DEFAULTS;
-    const s = JSON.parse(raw);
-    // Groq a été retiré : on efface une éventuelle clé enregistrée par une version précédente
-    const keys = { gemini: s.keys?.gemini ?? '', mistral: s.keys?.mistral ?? '' };
-    const order = (s.order ?? DEFAULTS.order).filter((p: string): p is ProviderId => p in keys);
-    const models = Object.fromEntries(Object.entries(s.models ?? {}).filter(([p]) => p in keys));
-    const merged: Settings = { ...DEFAULTS, ...s, keys, order: order.length ? order : DEFAULTS.order, models };
+    // L'IA a été retirée : les clés et réglages IA d'une version précédente sont effacés de l'appareil
+    const { keys: _k, models: _m, order: _o, aiEnabled: _a, ...s } = JSON.parse(raw);
+    const merged: Settings = { ...DEFAULTS, ...s };
     // Libellés des contacts toujours accordés au département enregistré
     const d = departementByCode(merged.departement);
     return d ? { ...merged, contacts: contactsForDepartement(merged.contacts, d) } : merged;

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { interpretLab, deriveFindings, type LabValue } from '../src/engine/interpret';
 import { computeAlerts } from '../src/engine/alerts';
-import { rankDiseases } from '../src/engine/ddx';
+import { rankDiseases, likelihood, confidence, discriminants, strength } from '../src/engine/ddx';
 import { parseLabText } from '../src/ocr/parse';
 import { normalizeUnit, ANALYTES } from '../src/data/analytes';
 import { DISEASES } from '../src/data/diseases';
@@ -175,5 +175,46 @@ describe('OCR réel (Tesseract)', () => {
     expect(alt.value).toBe(88);
     expect(v.find((x) => x.analyte === 'uree')!.reportRange).toBeUndefined(); // intervalle illisible rejeté
     expect(v).toHaveLength(6);
+  });
+});
+
+describe('solidité du classement', () => {
+  it('un seul signe vague : insuffisant, jamais « forte », barre courte', () => {
+    const r = run('chien', {}, ['decubitus']);
+    expect(confidence(r.ddx)).toBe('insuffisant');
+    expect(r.ddx.every((x) => likelihood(x, r.ddx[0].score) !== 'forte')).toBe(true);
+    expect(strength(r.ddx[0])).toBeLessThan(0.1);
+  });
+
+  it('tableau franc : solide', () => {
+    const r = run('chat', { crea: 350, uree: 25, p: 2.8, ht: 24, du: 1.012 }, ['pupd', 'amaigrissement', 'age']);
+    expect(confidence(r.ddx)).toBe('solide');
+    expect(likelihood(r.ddx[0], r.ddx[0].score)).toBe('forte');
+  });
+
+  it('propose les signes cardinaux manquants, sans reprendre ceux déjà présents', () => {
+    const r = run('chien', {}, ['decubitus']);
+    const { signs } = discriminants('chien', r.ddx, r.findings);
+    expect(signs.map((s) => s.id)).toContain('raideur');
+    expect(signs.map((s) => s.id)).not.toContain('decubitus');
+  });
+
+  it('ajouter un signe proposé fait progresser le classement', () => {
+    const before = run('chien', {}, ['vomissements']);
+    const { signs } = discriminants('chien', before.ddx, before.findings);
+    const after = run('chien', {}, ['vomissements', signs[0].id]);
+    expect(after.ddx[0].score).toBeGreaterThan(before.ddx[0].score);
+  });
+
+  it('suggère des analyses distinctes des signes cliniques', () => {
+    const r = run('chien', {}, ['vomissements', 'abattement']);
+    const { signs, labs } = discriminants('chien', r.ddx, r.findings);
+    expect(labs.length).toBeGreaterThan(0);
+    expect(labs.some((l) => signs.some((s) => s.id === l.id))).toBe(false);
+  });
+
+  it('pas de maladie propre aux femelles chez un mâle', () => {
+    const r = run('chien', {}, ['male', 'abattement', 'anorexie', 'distension_abdo', 'pupd']);
+    expect(r.ddx.map((x) => x.disease.id)).not.toContain('pyometre');
   });
 });

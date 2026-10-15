@@ -3,12 +3,9 @@ import { signal } from '@preact/signals';
 import { useEffect, useState } from 'preact/hooks';
 import { Icon, type IconName } from './Icon';
 import { route, go, back } from '../lib/router';
-import { online, services, STATE_LABEL } from '../state/status';
-import { settings, type ProviderId } from '../state/settings';
-import { PROVIDER_LABEL } from '../ai/providers';
 import { DEPARTEMENTS } from '../data/departements';
 
-// ——— Barre de navigation et bandeau d'état permanent ———
+// ——— Barre de navigation ———
 export const updateReady = signal<null | (() => void)>(null);
 
 /** large : titre en grand sous la barre (écrans racines des onglets), comme dans les apps d'Apple. */
@@ -33,46 +30,14 @@ export function TopBar({ title, backTo, backLabel = 'Retour', large, action }: {
             )}
           </div>
           <div class="nav-title" aria-hidden={large && !scrolled ? 'true' : undefined}>{title}</div>
-          <div class="nav-right"><Status compact={!large || scrolled} /></div>
+          <div class="nav-right" />
         </div>
-        {!online.value && (
-          <div class="banner offline" role="status"><Icon name="wifiOff" size={20} />Hors ligne. Analyses, alertes, diagnostic et médicaments restent disponibles.</div>
-        )}
         {updateReady.value && (
           <div class="banner update"><Icon name="refresh" size={20} />Nouvelle version disponible<button class="btn small primary" onClick={() => updateReady.value?.()}>Mettre à jour</button></div>
         )}
       </header>
       {large && <div class="large-title"><h1>{title}</h1>{action}</div>}
     </>
-  );
-}
-
-function Status({ compact }: { compact?: boolean }) {
-  const s = settings.value;
-  const configured = s.order.filter((p) => s.keys[p]);
-  return (
-    <div class={`status ${compact ? 'compact' : ''}`} aria-live="polite">
-      {online.value
-        ? <span class="pill ok" aria-label="En ligne"><span class="dot" /><span class="txt">En ligne</span></span>
-        : <span class="pill warn"><span class="dot" /><span class="txt">Hors ligne</span></span>}
-      {online.value && s.aiEnabled && (configured.length === 0
-        ? <button class="pill" onClick={() => go('/reglages')} aria-label="IA non configurée"><span class="dot" /><span class="txt">Sans IA</span></button>
-        : <AiPills providers={configured} />)}
-    </div>
-  );
-}
-
-function AiPills({ providers }: { providers: ProviderId[] }) {
-  const sv = services.value;
-  const anyOk = providers.some((p) => sv[p].state === 'ok' || sv[p].state === 'inconnu');
-  const down = providers.filter((p) => !['ok', 'inconnu'].includes(sv[p].state));
-  const title = providers.map((p) => `${PROVIDER_LABEL[p]} : ${STATE_LABEL[sv[p].state]}${sv[p].message ? ` (${sv[p].message})` : ''}`).join('\n');
-  if (!down.length) return <span class="pill ok" title={title} aria-label={`IA disponible. ${title}`}><span class="dot" /><span class="txt">IA</span></span>;
-  // Libellé court dans la barre ; le détail par service est dans Réglages
-  return (
-    <button class={`pill ${anyOk ? 'warn' : 'crit'}`} title={title} aria-label={title} onClick={() => go('/reglages')}>
-      <span class="dot" /><span class="txt">{anyOk ? 'IA (relais)' : 'IA en panne'}</span>
-    </button>
   );
 }
 
@@ -117,7 +82,7 @@ export function Sheet({ title, onClose, children, doneLabel = 'OK' }: { title: s
   );
 }
 
-/** Choix du département : adapte contacts, repères épidémiologiques et consigne de l'IA. Reste sur l'iPhone. */
+/** Choix du département : adapte contacts et repères épidémiologiques. Reste sur l'iPhone. */
 export function DepartementSelect({ value, onChange }: { value: string; onChange: (code: string) => void }) {
   return (
     <select value={value} onChange={(e) => onChange(e.currentTarget.value)} aria-label="Département de la clinique">
@@ -155,32 +120,4 @@ export function Toast() {
   const vv = typeof window !== 'undefined' ? window.visualViewport : null;
   const keyboard = !!vv && vv.height < window.innerHeight - 150;
   return <div class={`toast ${keyboard ? 'top' : ''}`} style={keyboard ? { top: `${vv!.offsetTop + 10}px` } : undefined} role="status">{toastMsg.value}</div>;
-}
-
-// ——— Markdown minimal et sûr (pas de HTML injecté) ———
-const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
-function inline(s: string) {
-  return escapeHtml(s)
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/(^|[^*])\*(?!\s)(.+?)\*(?!\*)/g, '$1<em>$2</em>')
-    .replace(/`(.+?)`/g, '<code>$1</code>');
-}
-export function mdToHtml(md: string): string {
-  const out: string[] = [];
-  let list: 'ul' | 'ol' | null = null;
-  const close = () => { if (list) { out.push(`</${list}>`); list = null; } };
-  for (const raw of md.split('\n')) {
-    const line = raw.trimEnd();
-    let m: RegExpMatchArray | null;
-    if ((m = line.match(/^(#{1,4})\s+(.*)$/))) { close(); const lvl = Math.min(3, Math.max(2, m[1].length)); out.push(`<h${lvl}>${inline(m[2])}</h${lvl}>`); }
-    else if ((m = line.match(/^\s*[-*•]\s+(.*)$/))) { if (list !== 'ul') { close(); out.push('<ul>'); list = 'ul'; } out.push(`<li>${inline(m[1])}</li>`); }
-    else if ((m = line.match(/^\s*\d+[.)]\s+(.*)$/))) { if (list !== 'ol') { close(); out.push('<ol>'); list = 'ol'; } out.push(`<li>${inline(m[1])}</li>`); }
-    else if (!line.trim()) { close(); }
-    else { close(); out.push(`<p>${inline(line)}</p>`); }
-  }
-  close();
-  return out.join('');
-}
-export function Markdown({ text, typing }: { text: string; typing?: boolean }) {
-  return <div class={`md ${typing ? 'typing' : ''}`} dangerouslySetInnerHTML={{ __html: mdToHtml(text) }} />;
 }

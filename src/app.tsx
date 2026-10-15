@@ -31,7 +31,7 @@ export function App() {
   );
 }
 
-const DEPT_HELP = 'Il sert à adapter les contacts (services vétérinaires, GDS, laboratoire), les repères épidémiologiques et l’avis de l’IA. Il reste sur cet iPhone.';
+const DEPT_HELP = 'Il sert à adapter les contacts (services vétérinaires, GDS, laboratoire), et les repères épidémiologiques. Il reste sur cet iPhone.';
 
 function AskDepartement() {
   const [code, setCode] = useState('');
@@ -53,7 +53,7 @@ function Welcome() {
       <div class="welcome">
         <h1>Bienvenue dans Véto+</h1>
         <div class="feature"><Icon name="flask" /><div><b>Analyses lues en photo</b><p>Valeurs, intervalles par espèce, alertes vitales et diagnostic différentiel.</p></div></div>
-        <div class="feature"><Icon name="wifiOff" /><div><b>Fonctionne hors ligne</b><p>Le diagnostic local, les médicaments ANMV et les calculateurs restent disponibles sans réseau. L’IA, facultative et gratuite, complète l’analyse quand le réseau est là.</p></div></div>
+        <div class="feature"><Icon name="wifiOff" /><div><b>Fonctionne hors ligne</b><p>Tout est calculé sur l’iPhone, sans réseau ni compte : lecture des photos, diagnostic, médicaments ANMV et calculateurs. Aucune donnée ne quitte l’appareil.</p></div></div>
         {!standalone && (
           <div class="feature"><Icon name="share" /><div><b>Installer sur l’iPhone</b><p>Dans Safari, touchez Partager, puis « Sur l’écran d’accueil ».</p></div></div>
         )}

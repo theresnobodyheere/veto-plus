@@ -133,23 +133,10 @@ small, .muted { color: var(--muted); }
 .large-title { padding: 2px 16px 6px; }
 .large-title h1 { margin: 0; }
 
-/* ——— État du réseau et des IA (toujours visible en haut à droite) ——— */
-.status { display: flex; gap: 10px; align-items: center; font-size: 13px; color: var(--muted); white-space: nowrap; }
-.pill { display: inline-flex; align-items: center; gap: 5px; padding: 0; border: 0; background: none; color: var(--muted); font-size: 13px; font-weight: 500; }
-.pill .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--gray); }
-.pill.ok .dot { background: var(--ok); }
-.pill.warn { color: var(--warn); } .pill.warn .dot { background: var(--warn); }
-.pill.crit { color: var(--crit); } .pill.crit .dot { background: var(--crit); }
-/* Écrans de détail : simples pastilles quand tout va bien, texte seulement en cas de problème */
-.status.compact { gap: 6px; }
-.status.compact .pill:not(.warn):not(.crit) .txt { display: none; }
-.status.compact .pill .dot { width: 8px; height: 8px; }
 .banner {
   margin: 4px 16px 8px; padding: 10px 12px; border-radius: var(--radius); font-size: 15px;
   display: flex; gap: 10px; align-items: center; background: var(--card);
 }
-.banner.offline { color: var(--text); }
-.banner.offline .icon { color: var(--warn); }
 .banner.update .icon { color: var(--brand); }
 .banner button { margin-left: auto; }
 
@@ -491,19 +478,16 @@ details.card[open] > summary::after { transform: rotate(90deg); }
 .ddx .body .label { color: var(--muted); font-size: 13px; text-transform: uppercase; letter-spacing: 0.02em; margin-top: 10px; }
 .lk-forte { color: var(--ok); } .lk-moyenne { color: var(--warn); } .lk-faible { color: var(--muted); }
 
-/* ——— Avis de l'IA ——— */
-.md { font-size: 16px; line-height: 1.42; }
-.md h2 { font-size: 17px; font-weight: 600; margin: 16px 0 4px; }
-.md h2:first-child { margin-top: 2px; }
-.md h3 { font-size: 15px; font-weight: 600; }
-.md ul, .md ol { padding-left: 20px; margin: 4px 0; }
-.md li { margin: 3px 0; }
-.md p { margin: 6px 0; }
-.md code { font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 0.9em; }
-.typing::after { content: ''; display: inline-block; width: 8px; height: 8px; margin-left: 4px; border-radius: 50%; background: var(--brand); animation: blink 1s ease-in-out infinite; }
-@keyframes blink { 50% { opacity: 0.2; } }
-.followup { margin-top: 12px; padding-top: 10px; box-shadow: inset 0 var(--hair) 0 var(--line); }
-.followup > b { display: block; margin-bottom: 2px; }
+/* ——— Pour affiner : signes qui départagent les hypothèses ——— */
+.refine { display: flex; flex-wrap: wrap; gap: 8px; }
+.refine .chip { text-align: left; align-items: flex-start; height: auto; padding-top: 7px; padding-bottom: 7px; }
+.refine .chip .icon { margin-top: 2px; flex: none; }
+.refine-label { display: block; }
+.refine-for { display: block; font-size: 12px; opacity: 0.75; }
+.label-line { color: var(--muted); font-size: 13px; text-transform: uppercase; letter-spacing: 0.02em; margin: 14px 0 4px; }
+.refine-labs { margin: 0; padding-left: 18px; font-size: 15px; }
+.refine-labs li { margin: 3px 0; }
+
 .spinner {
   width: 18px; height: 18px; display: inline-block; vertical-align: -3px; border-radius: 50%;
   background: conic-gradient(from 0deg, transparent 0 25%, var(--muted));

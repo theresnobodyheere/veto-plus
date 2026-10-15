@@ -1,22 +1,18 @@
 # Véto+ — aide au diagnostic vétérinaire mixte
 
-Web app (PWA) installable sur iPhone. Elle fonctionne **hors ligne** et peut utiliser une IA gratuite quand le réseau est disponible.
+Web app (PWA) installable sur iPhone. Tout fonctionne **hors ligne**, sur l’appareil : aucun service externe, aucune clé, aucune donnée envoyée.
 Conçue pour un exercice mixte : canine, bovins, ovins, caprins, équins, porcins, faune de parc zoologique et primates (magots).
 
 ## Fonctions
 
-| | Hors ligne | En ligne (IA) |
-|---|---|---|
-| Photo d’un compte rendu d’analyses → valeurs | Tesseract (sur l’iPhone) | Gemini / Mistral (vision) |
-| Interprétation, intervalles par espèce, conversions d’unités | ✅ | ✅ |
-| **Alertes vitales** (K⁺, glycémie, Ca, Mg, lactates, Ht, BHB…) | ✅ | ✅ |
-| Diagnostic différentiel classé (≈ 90 maladies, sources citées) | ✅ | + avis critique de l’IA, questions de suivi |
-| Médicaments ANMV (3 200+), **temps d’attente**, RCP, calcul de dose | ✅ | ✅ |
-| Calculateurs : fluides, veau diarrhéique, transfusion, électrolytes, RER, dose, unités, gestation | ✅ | ✅ |
-| Maladies réglementées, contacts DDETSPP / GDS / CNITV, fiches faune et herpès B | ✅ | ✅ |
-| Dictée vocale (touche micro du clavier iOS, sur l’iPhone), historique chiffré sur l’iPhone, PDF partageable | ✅ | ✅ |
-
-Un bandeau indique en permanence l’état **En ligne / Hors ligne** et l’état de chaque IA (quota atteint, clé invalide, panne). Si Gemini échoue, Mistral prend le relais.
+- Photo d’un compte rendu d’analyses → valeurs (Tesseract, sur l’iPhone)
+- Interprétation, intervalles par espèce, conversions d’unités
+- **Alertes vitales** (K⁺, glycémie, Ca, Mg, lactates, Ht, BHB…)
+- Diagnostic différentiel classé (≈ 90 maladies, sources citées), avec un avertissement quand les éléments sont insuffisants et les **signes à rechercher** pour départager les hypothèses (un toucher les ajoute et met à jour le classement)
+- Médicaments ANMV (3 200+), **temps d’attente**, RCP, calcul de dose
+- Calculateurs : fluides, veau diarrhéique, transfusion, électrolytes, RER, dose, unités, gestation
+- Maladies réglementées, contacts DDETSPP / GDS / CNITV, fiches faune et herpès B
+- Dictée vocale (touche micro du clavier iOS), historique sur l’iPhone, PDF partageable
 
 ## Mise en ligne (gratuite, GitHub Pages) — une seule fois
 
@@ -40,15 +36,6 @@ Chaque `git push` republie l’appli. La base médicaments est retéléchargée 
 
 Les mises à jour sont proposées par un bandeau « Nouvelle version disponible », jamais imposées en pleine consultation.
 
-## Clés IA gratuites (facultatives)
-
-Dans **Réglages**, coller une ou deux clés, puis toucher **Tester** :
-
-- **Google Gemini** (recommandé, le meilleur pour lire les photos) : [aistudio.google.com/apikey](https://aistudio.google.com/apikey). Attention : avec l’offre gratuite, Google peut utiliser les données envoyées pour améliorer ses modèles.
-- **Mistral** (entreprise française) : [console.mistral.ai/api-keys](https://console.mistral.ai/api-keys). Si la console affiche « Passez à un plan supérieur », toucher **Mettre à niveau** et choisir l’offre gratuite **Experiment** (vérification par téléphone, sans carte bancaire), pas l’offre payante Scale. Attention : avec l’offre gratuite, les données envoyées peuvent aussi servir à entraîner les modèles de Mistral.
-
-Les modèles les plus récents sont détectés automatiquement. Les clés restent sur l’iPhone. La référence de l’animal ou de l’élevage n’est jamais envoyée.
-
 ## À faire valider par le vétérinaire
 
 - **Intervalles de référence** : Réglages → Intervalles de la clinique, pour les adapter aux automates de la clinique. L’intervalle imprimé sur un compte rendu reste toujours prioritaire.
@@ -60,12 +47,12 @@ Les modèles les plus récents sont détectés automatiquement. Les clés resten
 ```bash
 npm install
 npm run dev          # serveur local
-npm test             # tests du moteur, de l’OCR, du relais IA, du PDF
+npm test             # tests du moteur, de l’OCR, du PDF
 npm run build        # version de production dans dist/
 npm run data:anmv    # retélécharge la base ANMV (nécessite 7z)
 ```
 
-Structure : `src/data` (espèces, analytes, intervalles, signes, maladies, réglementation, faune), `src/engine` (interprétation, alertes, diagnostic différentiel, calculs), `src/ocr` (Tesseract + analyse du texte), `src/ai` (fournisseurs, relais, consignes), `src/screens` (écrans).
+Structure : `src/data` (espèces, analytes, intervalles, signes, maladies, réglementation, faune), `src/engine` (interprétation, alertes, diagnostic différentiel, calculs), `src/ocr` (Tesseract + analyse du texte), `src/screens` (écrans).
 
 ## Sources
 

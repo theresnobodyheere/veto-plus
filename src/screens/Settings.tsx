@@ -1,72 +1,25 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { TopBar, toast, DepartementSelect } from '../components/ui';
 import { Icon } from '../components/Icon';
-import { settings, updateSettings, setDepartement, contactsForDepartement, DEFAULT_CONTACTS, type ProviderId } from '../state/settings';
+import { settings, updateSettings, setDepartement, contactsForDepartement, DEFAULT_CONTACTS } from '../state/settings';
 import { departementByCode } from '../data/departements';
-import { services, STATE_LABEL } from '../state/status';
-import { testProvider } from '../ai/router';
-import { PROVIDER_LABEL, PROVIDER_KEY_URL } from '../ai/providers';
 import { SPECIES, type SpeciesId } from '../data/species';
 import { ANALYTES } from '../data/analytes';
 import { RANGES } from '../data/ranges';
 import { db, exportAll, importAll } from '../db/db';
 import { loadDrugs } from '../data/drugs';
 
-const HINT: Record<ProviderId, string> = {
-  gemini: 'Le meilleur pour lire les photos. Offre gratuite : les données peuvent servir à améliorer les modèles de Google.',
-  mistral: 'Entreprise française. Offre gratuite « Experiment » (vérification par téléphone) : les données peuvent servir à améliorer les modèles de Mistral.',
-};
-
 export function Settings() {
   return (
     <>
       <TopBar title="Réglages" large />
       <main>
-        <AiSettings />
         <Clinic />
         <ContactsEdit />
         <Ranges />
         <Data />
         <About />
       </main>
-    </>
-  );
-}
-
-function AiSettings() {
-  const s = settings.value;
-  const [busy, setBusy] = useState<ProviderId | null>(null);
-  const [result, setResult] = useState<Partial<Record<ProviderId, string>>>({});
-  const test = async (p: ProviderId) => {
-    setBusy(p);
-    const r = await testProvider(p);
-    setResult({ ...result, [p]: r });
-    setBusy(null);
-  };
-  return (
-    <>
-      <div class="section-title">Intelligence artificielle</div>
-      <div class="card">
-        <label class="row"><input type="checkbox" checked={s.aiEnabled} onChange={(e) => updateSettings({ aiEnabled: e.currentTarget.checked })} /> Utiliser l’IA avec le réseau</label>
-      </div>
-      <p class="section-foot" style="margin-bottom:18px">Ordre d’essai : Gemini, puis Mistral. Si Gemini est en panne ou a atteint son quota, Mistral prend le relais automatiquement. Les clés restent sur cet iPhone. Aucune référence d’animal ni de propriétaire n’est envoyée.</p>
-      {s.order.map((p) => {
-        const st = services.value[p];
-        const tone = st.state === 'ok' ? 'ok' : ['inconnu', 'sans-cle'].includes(st.state) ? '' : 'crit';
-        return (
-          <div class="card" key={p}>
-            <div class="row"><b class="grow">{PROVIDER_LABEL[p]}</b><span class={`tag ${tone}`}>{s.keys[p] ? STATE_LABEL[st.state] : 'clé manquante'}</span></div>
-            <p class="fine" style="margin:2px 0 10px">{HINT[p]}</p>
-            <div class="row">
-              <input type="password" autoComplete="off" placeholder="Coller la clé API" value={s.keys[p]}
-                onInput={(e) => updateSettings({ keys: { ...settings.value.keys, [p]: e.currentTarget.value.trim() }, models: { ...settings.value.models, [p]: undefined } })} />
-              <button class="btn small" disabled={!s.keys[p] || busy === p} onClick={() => test(p)}>{busy === p ? <span class="spinner" /> : 'Tester'}</button>
-            </div>
-            {result[p] && <p class="row" style={`font-size:15px;color:var(--${st.state === 'ok' ? 'ok' : 'crit'})`}><Icon name={st.state === 'ok' ? 'check' : 'warning'} size={18} />{st.state === 'ok' ? 'Modèle : ' : ''}{result[p]}</p>}
-            <a href={PROVIDER_KEY_URL[p]} target="_blank" rel="noopener" style="display:inline-block;font-size:15px;margin-top:8px">Obtenir une clé gratuite ↗</a>
-          </div>
-        );
-      })}
     </>
   );
 }
@@ -156,7 +109,7 @@ function Clinic() {
         <div class="field"><label>Vétérinaire (en-tête des PDF)</label>
           <input type="text" value={s.vetName} onInput={(e) => updateSettings({ vetName: e.currentTarget.value })} /></div>
       </div>
-      <p class="section-foot">Le département adapte les contacts, les repères épidémiologiques et l’avis de l’IA. Ces informations restent sur cet iPhone.</p>
+      <p class="section-foot">Le département adapte les contacts, et les repères épidémiologiques. Ces informations restent sur cet iPhone.</p>
     </>
   );
 }

@@ -1,14 +1,14 @@
 import { useMemo, useRef, useState } from 'preact/hooks';
-import { draft, patch, patchManual, setNotes, addPhotos, removePhoto, setPhotoKind, reading, toggleSign, setLab, removeLab, analysis, persist, startAI, ai } from '../state/case';
+import { draft, patch, patchManual, setNotes, addPhotos, removePhoto, setPhotoKind, reading, toggleSign, setLab, removeLab, analysis, persist } from '../state/case';
 import { speciesById } from '../data/species';
 import { ANALYTES, analyteById, toCanonical } from '../data/analytes';
 import { SIGN_GROUPS, signLabel, type SignGroup } from '../data/signs';
 import { formatValue } from '../engine/interpret';
 import { searchSigns, signsForSpecies } from '../engine/textSigns';
+import { parseNotes } from '../engine/notes';
 import { TopBar } from '../components/ui';
 import { Icon } from '../components/Icon';
 import { go } from '../lib/router';
-import { aiAvailable } from '../state/status';
 
 /** Signes proposés en premier selon l'espèce */
 const COMMON: Record<string, string[]> = {
@@ -27,7 +27,6 @@ export function Case() {
   const onAnalyse = async () => {
     await persist();
     go('/resultat');
-    if (aiAvailable.value && ai.value.status !== 'running') void startAI();
   };
 
   return (
@@ -85,7 +84,7 @@ function Signalement() {
             }} /></label>
         ))}
       </div>
-      <p class="section-foot">La référence reste sur cet iPhone : elle n’est jamais envoyée à l’IA.</p>
+      <p class="section-foot">La référence reste sur cet iPhone.</p>
     </section>
   );
 }
@@ -119,7 +118,7 @@ function Photos() {
           </div>
         )}
       </div>
-      <p class="section-foot">Comptes rendus d’analyses et photos cliniques (lésion, échographie, ECG…) : Véto+ les trie tout seul. Les valeurs sont lues, les photos cliniques sont jointes à l’avis de l’IA. Le type reste modifiable sous chaque photo.</p>
+      <p class="section-foot">Comptes rendus d’analyses et photos cliniques (lésion, échographie, ECG…) : Véto+ les trie tout seul. Les valeurs sont lues sur l’iPhone, sans réseau ; les photos cliniques sont conservées avec le cas. Le type reste modifiable sous chaque photo.</p>
     </section>
   );
 }
@@ -152,7 +151,7 @@ function LabEditor() {
                 <tr key={r.analyte.id} class={r.status}>
                   <td class="name">{r.analyte.short}
                     {r.input.unitGuessed && <div class="guessed">unité devinée ({r.input.rawValue} → {r.analyte.unit})</div>}
-                    {r.input.source !== 'manuel' && <span class="tag">{{ ia: 'IA', ocr: 'Photo', texte: 'Texte' }[r.input.source]}</span>}
+                    {r.input.source !== 'manuel' && <span class="tag">{{ ia: 'Photo', ocr: 'Photo', texte: 'Texte' }[r.input.source]}</span>}
                   </td>
                   <td class="val">
                     <input type="text" inputMode="decimal" value={formatValue(r.analyte, r.value)}
@@ -258,8 +257,11 @@ function Signs() {
 function Notes() {
   const d = draft.value!;
   const auto = d.auto;
+  const vitals = useMemo(() => parseNotes(d.notes, d.species), [d.notes, d.species]);
   // Ce qui a été repris du texte, pour que le vétérinaire voie ce qui a été rempli
   const filled = auto ? [
+    vitals.temp != null && `T ${String(vitals.temp).replace('.', ',')} °C`,
+    vitals.hr != null && `FC ${vitals.hr}/min`,
     auto.weight && d.weight != null && `poids ${d.weight} kg`,
     auto.age && d.age && `âge ${d.age}`,
     auto.sex && d.sex && d.sex.toLowerCase(),
