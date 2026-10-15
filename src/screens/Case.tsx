@@ -41,13 +41,14 @@ export function Case() {
       <header class="wiz-top">
         <div class="wiz-row">
           <button class="back" onClick={() => (i === 0 ? go('/') : goTo(i - 1))} aria-label={i === 0 ? 'Retour : choix de l’animal' : 'Étape précédente'}>
-            <Icon name="chevronLeft" />{i === 0 ? sp.label : 'Retour'}
+            <Icon name="chevronLeft" />{i === 0 ? 'Animal' : 'Retour'}
           </button>
-          <span class="wiz-name">{s.name} · {i + 1}/{steps.length}</span>
+          {/* L'animal, choisi sur l'écran d'accueil, est la question 1 */}
+          <span class="wiz-name">{s.name} · {i + 2}/{steps.length + 1}</span>
           <button class="wiz-skip" onClick={next} hidden={i === 0}>Passer</button>
         </div>
-        <div class="wiz-progress"><div style={{ width: `${Math.round(((i + 1) / steps.length) * 100)}%` }} /></div>
-        <Recap steps={steps} current={i} onJump={goTo} />
+        <div class="wiz-progress"><div style={{ width: `${Math.round(((i + 2) / (steps.length + 1)) * 100)}%` }} /></div>
+        <Recap steps={steps} current={i} onJump={goTo} species={sp.label} />
       </header>
       <main class="wiz">
         {i === 0 && sp.note && <div class="alert reg"><p>{sp.note}</p></div>}
@@ -246,7 +247,7 @@ function BreedStep({ head, next }: { head: preact.ComponentChildren; next: () =>
 }
 
 /** Réponses déjà données : un toucher ramène à l'étape */
-function Recap({ steps, current, onJump }: { steps: Step[]; current: number; onJump: (i: number) => void }) {
+function Recap({ steps, current, onJump, species }: { steps: Step[]; current: number; onJump: (i: number) => void; species: string }) {
   const d = draft.value!;
   const fr = (n: number) => String(n).replace('.', ',');
   const items = steps.map((s, i) => {
@@ -260,9 +261,9 @@ function Recap({ steps, current, onJump }: { steps: Step[]; current: number; onJ
     else label = answerLabel(s, a);
     return { i, label };
   }).filter((x) => x.label && x.i !== current);
-  if (!items.length) return null;
   return (
     <div class="recap">
+      <button class="recap-chip" onClick={() => go('/')}>{species}</button>
       {items.map((x) => <button key={x.i} class="recap-chip" onClick={() => onJump(x.i)}>{x.label}</button>)}
     </div>
   );

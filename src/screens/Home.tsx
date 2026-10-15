@@ -1,41 +1,75 @@
+// Onglet Cas : première question du parcours (l'animal), puis reprise d'un cas en cours ou récent.
 import { useEffect, useState } from 'preact/hooks';
-import { SPECIES, speciesById } from '../data/species';
-import { TopBar, Chevron } from '../components/ui';
-import { newCase, openCase } from '../state/case';
+import { SPECIES, speciesById, type SpeciesId } from '../data/species';
+import { Chevron } from '../components/ui';
+import { Icon } from '../components/Icon';
+import { draft, newCase, openCase } from '../state/case';
+import { motifById } from '../data/wizard';
 import { go } from '../lib/router';
 import { db, type CaseRecord } from '../db/db';
 
+const DOMESTIC: { id: SpeciesId; detail?: string }[] = [
+  { id: 'chien' }, { id: 'chat' }, { id: 'bovin' }, { id: 'cheval' }, { id: 'ovin' }, { id: 'caprin' }, { id: 'porc' },
+];
+const WILD = SPECIES.filter((s) => s.group === 'faune');
+
 export function Home() {
   const [recent, setRecent] = useState<CaseRecord[]>([]);
+  const [wild, setWild] = useState(false);
+  const [picked, setPicked] = useState<SpeciesId | null>(null);
   useEffect(() => { db.cases.orderBy('updatedAt').reverse().limit(3).toArray().then(setRecent).catch(() => {}); }, []);
-  const start = (id: (typeof SPECIES)[number]['id']) => { newCase(id); go('/cas'); };
-  const groups: { title: string; ids: string[] }[] = [
-    { title: 'Animaux de compagnie', ids: ['chien', 'chat'] },
-    { title: 'Rurale et équine', ids: ['bovin', 'ovin', 'caprin', 'cheval', 'porc'] },
-    { title: 'Faune et parc animalier', ids: ['macaque', 'ours', 'loup', 'lynx', 'bison', 'cervide', 'bouquetin', 'sanglier'] },
-  ];
+  // Un choix est visible un court instant avant de passer à la question suivante
+  const start = (id: SpeciesId) => { setPicked(id); setTimeout(() => { newCase(id); go('/cas'); }, 160); };
+  const current = draft.value && !draft.value.id && draft.value.motif ? draft.value : null;
+
+  const tile = (id: SpeciesId, detail?: string) => {
+    const sp = speciesById(id);
+    const d = detail ?? (sp.proxy ? `réf. ${speciesById(sp.proxy).label.toLowerCase()}` : undefined);
+    return (
+      <button key={id} class={`opt ${picked === id ? 'sel' : ''}`} onClick={() => start(id)}>
+        <span class="opt-t">{sp.label}</span>
+        {d && <span class="opt-d">{d}</span>}
+      </button>
+    );
+  };
+
   return (
     <>
-      <TopBar title="Nouveau cas" large />
-      <main>
-        {groups.map((g) => (
-          <section key={g.title}>
-            <div class="section-title">{g.title}</div>
+      <header class="wiz-top">
+        <div class="wiz-row">
+          {wild ? <button class="back" onClick={() => setWild(false)} aria-label="Retour aux animaux domestiques"><Icon name="chevronLeft" />Domestiques</button> : <span />}
+          <span class="wiz-name">Nouveau cas · Animal</span>
+          <span />
+        </div>
+        <div class="wiz-progress"><div style={{ width: '6%' }} /></div>
+      </header>
+      <main class="wiz home">
+        <h1 class="wiz-title">{wild ? 'Quelle espèce ?' : 'Quel animal ?'}</h1>
+        {wild && <p class="wiz-sub">Les intervalles et le diagnostic utilisent l’espèce domestique de référence.</p>}
+        <div class="opts">
+          {wild ? WILD.map((s) => tile(s.id)) : (
+            <>
+              {DOMESTIC.map((s) => tile(s.id, s.detail))}
+              <button class="opt" onClick={() => setWild(true)}>
+                <span class="opt-t">Faune, parc</span><span class="opt-d">Magot, ours, loup, cervidé…</span>
+              </button>
+            </>
+          )}
+        </div>
+
+        {current && (
+          <>
+            <div class="section-title">Cas en cours</div>
             <div class="list">
-              {g.ids.map((id) => {
-                const sp = speciesById(id as any);
-                const ref = sp.proxy ? speciesById(sp.proxy).label.toLowerCase() : '';
-                return (
-                  <button key={id} class="list-item species-row" onClick={() => start(sp.id)}>
-                    <span class="grow">{sp.label}</span>
-                    {ref && <span class="detail" style="font-size:15px">réf. {ref}</span>}
-                    <Chevron />
-                  </button>
-                );
-              })}
+              <button class="list-item" onClick={() => go('/cas')}>
+                <span class="grow"><b>{speciesById(current.species).label}</b>
+                  <div class="sub">{motifById(current.species, current.motif)?.label ?? 'Saisie commencée'}</div></span>
+                <Chevron />
+              </button>
             </div>
-          </section>
-        ))}
+          </>
+        )}
+
         {recent.length > 0 && (
           <>
             <div class="section-title">Derniers cas</div>
