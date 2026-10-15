@@ -21,6 +21,8 @@ export interface CaseRecord {
   hr?: number;
   rr?: number;
   weight?: number;
+  /** Poids estimé (ruban, formule) et non pesé */
+  weightEstimated?: boolean;
   herd?: Herd;
   /** Signes cochés (étape des signes, « Pour affiner ») */
   signs: string[];
@@ -39,6 +41,12 @@ export interface CaseRecord {
   photos?: Blob[];
   photoKinds?: ('analyse' | 'clinique')[];
   summary?: { top?: string; alerts: number; critical: number };
+  /** false tant que la saisie n'est pas terminée (absent : cas des versions précédentes, enregistrés à la fin) */
+  finished?: boolean;
+  /** Étape du parcours où reprendre un cas interrompu */
+  step?: number;
+  /** Cas précédent du même animal (visite de suivi) */
+  followOf?: number;
 }
 
 class VetoDB extends Dexie {
@@ -50,6 +58,25 @@ class VetoDB extends Dexie {
 }
 
 export const db = new VetoDB();
+
+/** Dernier cas interrompu (saisie non terminée), s'il date de moins de 3 jours */
+export async function lastUnfinished(): Promise<CaseRecord | undefined> {
+  const since = Date.now() - 3 * 24 * 3600 * 1000;
+  return db.cases.where('updatedAt').above(since).reverse().filter((c) => c.finished === false).first();
+}
+
+/** Visites précédentes du même animal, de la plus ancienne à la plus récente */
+export async function previousVisits(c: CaseRecord): Promise<CaseRecord[]> {
+  const out: CaseRecord[] = [];
+  let id = c.followOf;
+  while (id != null && out.length < 10) {
+    const prev = await db.cases.get(id);
+    if (!prev) break;
+    out.unshift(prev);
+    id = prev.followOf;
+  }
+  return out;
+}
 
 export async function saveCase(c: CaseRecord): Promise<number> {
   c.updatedAt = Date.now();

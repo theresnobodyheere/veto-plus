@@ -1,5 +1,5 @@
 import { useState } from 'preact/hooks';
-import { draft, analysis, toggleSign, persist, step } from '../state/case';
+import { draft, analysis, toggleSign, persist, step, followUp } from '../state/case';
 import { speciesById } from '../data/species';
 import { signLabel } from '../data/signs';
 import { formatValue } from '../engine/interpret';
@@ -41,6 +41,7 @@ export function Result() {
           <button class="btn small" onClick={() => go('/cas')}><Icon name="pencil" />Modifier</button>
           <button class="btn small" onClick={exportPdf}><Icon name="share" />PDF</button>
           <button class="btn small" onClick={() => go(`/medicaments?esp=${sp.proxy ?? sp.id}`)}><Icon name="medicaments" />Médicaments</button>
+          {d.id != null && <button class="btn small" onClick={() => { followUp(); go('/cas'); }}><Icon name="clock" />Suivi</button>}
         </div>
 
         {/* Alertes vitales en premier */}

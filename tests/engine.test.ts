@@ -159,3 +159,14 @@ describe('solidité du classement', () => {
     expect(analysis.value!.findings).not.toContain('grand_chien');
   });
 });
+
+describe('signes reconnus dans un texte libre', () => {
+  it('retient les signes, ignore les négations de la même proposition', async () => {
+    const { detectSigns } = await import('../src/engine/textSigns');
+    const ids = (sp: Parameters<typeof detectSigns>[1], t: string) => detectSigns(t, sp).map((s) => s.id);
+    expect(ids('chien', 'Vomit depuis hier, pas de diarrhée, abattu, boit beaucoup.')).toEqual(['vomissements', 'abattement', 'pupd']);
+    expect(ids('bovin', 'A vêlé hier, ne mange plus, pas de fièvre, oreilles froides')).toEqual(['mise_bas_recente', 'anorexie', 'hypothermie']);
+    expect(ids('cheval', 'Se roule, sans reflux au sondage')).toEqual(['douleur_abdo']);
+    expect(ids('chat', 'Ne vomit pas.')).toEqual([]);
+  });
+});

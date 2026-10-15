@@ -1,5 +1,5 @@
 // Cas en cours : réponses du parcours, valeurs d'analyses et analyse locale.
-import { signal, computed } from '@preact/signals';
+import { signal, computed, effect } from '@preact/signals';
 import type { CaseRecord } from '../db/db';
 import { saveCase } from '../db/db';
 import type { SpeciesId } from '../data/species';
@@ -18,12 +18,26 @@ export const draft = signal<Draft | null>(null);
 export const step = signal(0);
 
 export function newCase(species: SpeciesId) {
-  draft.value = { createdAt: Date.now(), updatedAt: Date.now(), species, signs: [], notes: '', labs: [], answers: {} };
+  draft.value = { createdAt: Date.now(), updatedAt: Date.now(), species, signs: [], notes: '', labs: [], answers: {}, finished: false };
   step.value = 0;
 }
 
+/** Ouvre un cas enregistré ; un cas interrompu reprend à l'étape où il a été laissé */
 export function openCase(c: CaseRecord) {
-  draft.value = { ...c, answers: c.answers ?? {} };
+  draft.value = clean = { ...c, answers: c.answers ?? {} };
+  step.value = c.finished === false ? (c.step ?? 0) : 0;
+}
+
+/** Visite de suivi du même animal : signalement, motifs et poids repris, examen et signes à refaire */
+export function followUp() {
+  const d = draft.value;
+  if (!d?.id) return;
+  const keep = ['herd', 'age', 'sex', 'stage', 'parite', 'herdInfo'];
+  const answers = Object.fromEntries(Object.entries(d.answers ?? {}).filter(([k]) => keep.includes(k)));
+  draft.value = {
+    createdAt: Date.now(), updatedAt: Date.now(), species: d.species, ref: d.ref, breed: d.breed, weight: d.weight, weightEstimated: d.weightEstimated,
+    age: d.age, sex: d.sex, herd: d.herd, motifs: motifsOf(d), answers, signs: [], notes: '', labs: [], finished: false, followOf: d.id,
+  };
   step.value = 0;
 }
 
@@ -145,14 +159,42 @@ export const canAnalyse = computed(() => {
 
 // ——— Enregistrement ———
 
-export async function persist() {
+// Les enregistrements se suivent un par un : le premier attribue l'identifiant, les suivants le réutilisent
+let queue: Promise<unknown> = Promise.resolve();
+
+async function save(extra: Partial<Draft> = {}) {
   const d = draft.value;
   const a = analysis.value;
-  if (!d || !a) return;
+  if (!d || !a || typeof indexedDB === 'undefined') return;
   const record: CaseRecord = {
-    ...d,
+    ...d, ...extra, step: step.value,
     summary: { top: a.ddx[0]?.disease.name, alerts: a.alerts.length, critical: a.alerts.filter((x) => x.level === 'critique').length },
   };
   const id = await saveCase(record);
-  if (!d.id) patch({ id });
+  // Le cas affiché peut avoir changé pendant l'enregistrement
+  const cur = draft.value;
+  if (cur && cur.createdAt === d.createdAt && (cur.id !== id || extra.finished)) {
+    draft.value = { ...cur, ...extra, id };
+    if (cur === d) clean = draft.value;
+  } else if (cur === d) clean = cur;
 }
+
+/** Enregistre le cas ; finished : saisie terminée (bouton Analyser, Voir le résultat) */
+export function persist(finished?: boolean): Promise<void> {
+  const run = queue.then(() => save(finished ? { finished: true } : {})).catch(() => { /* stockage indisponible */ });
+  queue = run;
+  return run;
+}
+
+// Sauvegarde continue : une saisie interrompue (appel, autre animal, appli fermée par iOS) n'est pas perdue.
+// Rien n'est enregistré avant le premier motif ou la première valeur.
+let timer: ReturnType<typeof setTimeout> | undefined;
+/** Cas tel qu'il vient d'être ouvert ou enregistré : le consulter ne le réenregistre pas */
+let clean: Draft | null = null;
+effect(() => {
+  const d = draft.value;
+  void step.value;
+  if (!d || d === clean || (!motifsOf(d).length && !d.labs.length)) return;
+  clearTimeout(timer);
+  timer = setTimeout(() => void persist(), 800);
+});

@@ -10,6 +10,7 @@ import { settings } from '../state/settings';
 import { departementByCode } from '../data/departements';
 import { selectedMotifs } from '../data/wizard';
 import { treatmentFor, lineDose } from '../data/treatments';
+import { previousVisits } from '../db/db';
 
 type RGB = [number, number, number];
 const C = {
@@ -87,6 +88,18 @@ export async function buildPdf(): Promise<Blob> {
     font(10, 'normal', C.muted); doc.text(safe(v), W - M - 4, ry + 4.3, { align: 'right' });
   });
   y += boxH;
+
+  // ——— Évolution : visites précédentes du même animal ———
+  const visits = d.followOf != null ? await previousVisits(d).catch(() => []) : [];
+  if (visits.length) {
+    section('Évolution');
+    const f = (n?: number, u = '') => (n != null ? `${n.toLocaleString('fr-FR')}${u}` : '—');
+    for (const v of [...visits, d]) {
+      const when = new Date(v.createdAt).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
+      const top = v === d ? a.ddx[0]?.disease.name : v.summary?.top;
+      para(`${when}${v === d ? ' (cette visite)' : ''} — T° ${f(v.temp, ' °C')} · FC ${f(v.hr)} · poids ${f(v.weight, ' kg')}${top ? ` · ${top}` : ''}`, 9.5, v === d ? 'bold' : 'normal');
+    }
+  }
 
   // ——— Alertes vitales : encadrés teintés ———
   if (a.alerts.length) {

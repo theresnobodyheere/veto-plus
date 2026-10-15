@@ -12,7 +12,7 @@ import { breedsFor } from '../data/breeds';
 import { buildSteps, motifsOf, selectedMotifs, motifSuggestions, answerLabel, type Step, type Option } from '../data/wizard';
 import { formatValue } from '../engine/interpret';
 import { likelihood } from '../engine/ddx';
-import { searchSigns, signsForSpecies } from '../engine/textSigns';
+import { searchSigns, signsForSpecies, detectSigns } from '../engine/textSigns';
 import { Icon } from '../components/Icon';
 import { go } from '../lib/router';
 
@@ -27,7 +27,7 @@ export function Case() {
   const sp = speciesById(d.species);
 
   const goTo = (n: number) => { step.value = Math.max(0, n); window.scrollTo(0, 0); };
-  const finish = async () => { await persist(); go('/resultat'); };
+  const finish = async () => { await persist(true); go('/resultat'); };
   const next = () => {
     // En quittant les signes, les questions ciblées sont choisies d'après le classement du moment
     if (s.kind === 'signs') freezeQuestions();
@@ -219,9 +219,23 @@ function SignsStep({ head }: { head: preact.ComponentChildren }) {
   const chip = (id: string, label = signLabel(id)) => (
     <button key={id} class={`chip ${d.signs.includes(id) ? 'on' : ''}`} onClick={() => toggleSign(id)} aria-pressed={d.signs.includes(id)}>{label}</button>
   );
+  // Signes reconnus dans les commémoratifs, pas encore retenus
+  const known = new Set([...d.signs, ...ms.preset, ...analysis.value!.findings]);
+  const inText = useMemo(() => detectSigns(d.notes, d.species), [d.notes, d.species]).filter((x) => !known.has(x.id));
   return (
     <>
       {head}
+      <textarea class="notes" rows={2} value={d.notes} name="commemoratifs" autoComplete="off"
+        placeholder="Commémoratifs : raconter le cas (le micro du clavier permet de dicter)"
+        onInput={(e) => patch({ notes: e.currentTarget.value })} />
+      {inText.length > 0 && (
+        <div class="refine">
+          <span class="fine">Reconnus dans le texte :</span>
+          {inText.map((x) => (
+            <button key={x.id} class="chip sugg" onClick={() => toggleSign(x.id)}><Icon name="plus" />{x.label}</button>
+          ))}
+        </div>
+      )}
       {sugg.length > 0 && <div class="chips">{sugg.map((id) => chip(id))}</div>}
       <div class="search" style="margin-top:6px">
         <input type="search" placeholder="Chercher un autre signe" value={q} onInput={(e) => setQ(e.currentTarget.value)} />

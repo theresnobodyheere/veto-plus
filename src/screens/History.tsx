@@ -40,12 +40,14 @@ export function History() {
                 {edit && (
                   <button class="del-btn" onClick={() => del(c)} aria-label={`Supprimer le cas ${c.ref || speciesById(c.species).label}`}><span class="del-dot" /></button>
                 )}
-                <button class="row grow history-open" disabled={edit} onClick={() => { openCase(c); go('/resultat'); }}>
+                <button class="row grow history-open" disabled={edit} onClick={() => { openCase(c); go(c.finished === false ? '/cas' : '/resultat'); }}>
                   <span class="grow">
                     <b>{c.ref || speciesById(c.species).label}</b>
                     <div class="sub">{c.summary?.top ?? 'Pas d’hypothèse'}</div>
                     <div class="fine">{speciesById(c.species).label}{c.breed ? ` ${c.breed.toLowerCase()}` : ''} · {new Date(c.updatedAt).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}</div>
                   </span>
+                  {c.finished === false && <span class="tag warn">en cours</span>}
+                  {c.followOf != null && <span class="tag info">suivi</span>}
                   {!!c.summary?.critical && <span class="tag crit">{c.summary.critical} alerte{c.summary.critical > 1 ? 's' : ''}</span>}
                   {!edit && <Chevron />}
                 </button>

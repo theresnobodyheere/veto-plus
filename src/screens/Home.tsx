@@ -1,9 +1,10 @@
 // Onglet Cas : première question du parcours (l'animal), et reprise d'un cas en cours (les cas enregistrés sont dans l'Historique).
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import { SPECIES, speciesById, type SpeciesId } from '../data/species';
 import { Chevron } from '../components/ui';
 import { Icon } from '../components/Icon';
-import { draft, newCase } from '../state/case';
+import { draft, newCase, openCase } from '../state/case';
+import { lastUnfinished, type CaseRecord } from '../db/db';
 import { motifsOf, selectedMotifs } from '../data/wizard';
 import { go } from '../lib/router';
 
@@ -17,7 +18,12 @@ export function Home() {
   const [picked, setPicked] = useState<SpeciesId | null>(null);
   // Un choix est visible un court instant avant de passer à la question suivante
   const start = (id: SpeciesId) => { setPicked(id); setTimeout(() => { newCase(id); go('/cas'); }, 160); };
-  const current = draft.value && !draft.value.id && motifsOf(draft.value).length ? draft.value : null;
+  // Cas interrompu : celui en mémoire, sinon le dernier enregistré non terminé (l'appli a pu être fermée par iOS)
+  const [stored, setStored] = useState<CaseRecord | undefined>();
+  useEffect(() => { lastUnfinished().then(setStored).catch(() => {}); }, []);
+  const mem = draft.value && draft.value.finished === false && motifsOf(draft.value).length ? draft.value : null;
+  const current = mem ?? stored ?? null;
+  const resume = () => { if (current !== mem) openCase(current!); go('/cas'); };
 
   const tile = (id: SpeciesId, detail?: string) => {
     const sp = speciesById(id);
@@ -58,9 +64,10 @@ export function Home() {
           <>
             <div class="section-title">Cas en cours</div>
             <div class="list">
-              <button class="list-item" onClick={() => go('/cas')}>
-                <span class="grow"><b>{speciesById(current.species).label}</b>
-                  <div class="sub">{selectedMotifs(current).map((m) => m.label).join(' + ') || 'Saisie commencée'}</div></span>
+              <button class="list-item" onClick={resume}>
+                <span class="grow"><b>{current.ref || speciesById(current.species).label}</b>
+                  <div class="sub">{selectedMotifs(current).map((m) => m.label).join(' + ') || 'Saisie commencée'}</div>
+                  <div class="fine">Reprendre · {new Date(current.updatedAt).toLocaleString('fr-FR', { weekday: 'short', hour: '2-digit', minute: '2-digit' })}</div></span>
                 <Chevron />
               </button>
             </div>

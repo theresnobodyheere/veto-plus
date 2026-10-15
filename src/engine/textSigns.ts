@@ -76,3 +76,40 @@ export function searchSigns(q: string, species: SpeciesId): Sign[] {
   return signsForSpecies(species).filter((s) => norm(s.label).includes(n) || (s.kw ?? []).some((k) => norm(k).includes(n))
     || [s.label, ...(s.kw ?? [])].some((k) => { const w = tokens(k); return qs.every((x) => w.some((y) => same(x, y) || (x.length >= 3 && y.startsWith(x)))); }));
 }
+
+/** Négations qui précèdent l'expression (« pas de toux », « sans fièvre », « aucune diarrhée ») */
+const NEG_BEFORE = new Set(['pas', 'sans', 'ni', 'aucun', 'aucune', 'absence', 'jamais', 'non']);
+
+/**
+ * Signes évoqués dans un texte libre (commémoratifs dictés ou tapés), hors tournures négatives
+ * (« pas de toux », « ne vomit pas »). Ordre d'apparition dans le texte.
+ */
+export function detectSigns(text: string, species: SpeciesId): Sign[] {
+  // Une négation ne porte que sur sa proposition : « pas de diarrhée, abattu » → abattement retenu
+  const clauses = text.split(/[.,;:!?\n]+|\s+mais\s+/i).map(tokens).filter((c) => c.length);
+  if (!clauses.length) return [];
+  const out: { s: Sign; at: number }[] = [];
+  for (const s of signsForSpecies(species)) {
+    let at = -1;
+    for (const phrase of [s.label, ...(s.kw ?? [])]) {
+      // Libellés composés (« Abattement / léthargie ») : chaque partie compte ; les précisions entre parenthèses non
+      for (const part of phrase.replace(/\([^)]*\)/g, '').split('/')) {
+        const words = tokens(part);
+        if (!words.length || (words.length === 1 && words[0].length < 4)) continue;
+        clauses.forEach((t, ci) => {
+          const m = find(t, words);
+          if (!m) return;
+          const before = t.slice(Math.max(0, m.start - 3), m.start);
+          const negated = before.some((w) => NEG_BEFORE.has(w))
+            || ((t[m.start - 1] === 'ne' || t[m.start - 1] === 'n') && ['pas', 'plus', 'jamais'].includes(t[m.end + 1]));
+          // « ne mange plus » est une expression du signe lui-même : la négation fait partie des mots attendus
+          if (negated && !words.some((w) => NEG_BEFORE.has(w) || w === 'plus')) return;
+          const pos = ci * 1000 + m.start;
+          if (at < 0 || pos < at) at = pos;
+        });
+      }
+    }
+    if (at >= 0) out.push({ s, at });
+  }
+  return out.sort((a, b) => a.at - b.at).map((x) => x.s);
+}
