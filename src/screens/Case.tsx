@@ -316,6 +316,49 @@ function AnalyseBar({ onAnalyse, action }: { onAnalyse: () => void; action?: Nex
   );
 }
 
+/**
+ * Photo du compte rendu (prise ou importée) : affichée dans la page, son texte se sélectionne avec la lecture de l'iPhone
+ * (Texte en direct), puis se colle en un toucher. La photo n'est pas enregistrée avec le cas (nom du propriétaire possible).
+ */
+function ReportPhoto() {
+  const [url, setUrl] = useState<string | null>(null);
+  const [msg, setMsg] = useState('');
+  useEffect(() => () => { if (url) URL.revokeObjectURL(url); }, [url]);
+  const choose = (f?: File) => { if (!f) return; setUrl(URL.createObjectURL(f)); setMsg(''); };
+  const paste = async () => {
+    try {
+      const text = (await navigator.clipboard.readText()).trim();
+      if (!text) { setMsg('Rien à coller : sélectionnez d’abord le texte de la photo, puis Copier.'); return; }
+      const cur = draft.value?.otherResults?.trim();
+      setReport(cur ? `${cur}\n${text}` : text);
+      setMsg('');
+    } catch {
+      setMsg('Collage refusé : touchez le champ de texte ci-dessous, puis Coller.');
+    }
+  };
+  return (
+    <div class="report-photo">
+      <label class="btn primary block">
+        <Icon name="camera" />{url ? 'Autre photo' : 'Photo du compte rendu'}
+        <input type="file" accept="image/*" hidden onChange={(e) => { choose(e.currentTarget.files?.[0]); e.currentTarget.value = ''; }} />
+      </label>
+      {url ? (
+        <>
+          <Norms>
+            <b>Appuyez longuement</b> sur le texte de la photo, puis <b>Tout sélectionner</b> et <b>Copier</b>.
+            Touchez ensuite <b>Coller le texte copié</b> : les valeurs et leurs intervalles sont repris.
+          </Norms>
+          <img class="report-img" src={url} alt="Compte rendu d’analyses" />
+          <button class="btn block" onClick={paste}><Icon name="doc" />Coller le texte copié</button>
+          {msg && <p class="fine crit-text">{msg}</p>}
+        </>
+      ) : (
+        <p class="fine">Prendre une photo ou en choisir une. La lecture se fait sur l’iPhone, sans réseau ; la photo n’est pas enregistrée.</p>
+      )}
+    </div>
+  );
+}
+
 function LabEditor() {
   const d = draft.value!;
   const rows = analysis.value!.rows;
@@ -336,10 +379,10 @@ function LabEditor() {
 
   return (
     <section>
-      <Norms>Touchez le champ ci-dessous, puis <b>Analyser le texte</b> : l’iPhone lit le compte rendu avec l’appareil photo, sans réseau. Les valeurs et les intervalles imprimés sont repris tout seuls.</Norms>
+      <ReportPhoto />
       <div class="card" style="margin-top:10px">
-        <textarea class="report" name="compte-rendu" autoComplete="off" autoCorrect="off" spellcheck={false}
-          placeholder="Touchez ici puis « Analyser le texte », ou collez le compte rendu"
+        <textarea class="report" name="compte-rendu" autoCorrect="off" spellcheck={false}
+          placeholder="Texte du compte rendu : collez-le ici"
           value={d.otherResults ?? ''} onInput={(e) => setReport(e.currentTarget.value)} />
         {!!d.otherResults?.trim() && (
           <p class={`fine row ${fromReport ? '' : 'crit-text'}`} style="margin:8px 0 4px;gap:6px">

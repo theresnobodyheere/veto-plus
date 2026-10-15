@@ -628,3 +628,8 @@ main.wiz > .section-foot { margin: -8px 0 0; }
 .tx-dose { font-weight: 700; font-size: 15px; color: var(--brand); text-align: right; font-variant-numeric: tabular-nums; align-self: start; white-space: nowrap; }
 .tx-links { grid-column: 1 / -1; display: flex; gap: 14px; font-size: 13px; }
 .tx-links a { color: var(--brand); text-decoration: none; font-weight: 600; }
+
+/* ——— Photo du compte rendu : le texte de l'image reste sélectionnable (Texte en direct d'iOS) ——— */
+.report-photo { display: flex; flex-direction: column; gap: 10px; }
+.report-photo label.btn { cursor: pointer; }
+.report-img { width: 100%; border-radius: var(--radius); background: var(--card); -webkit-user-select: auto; user-select: auto; -webkit-touch-callout: default; }
