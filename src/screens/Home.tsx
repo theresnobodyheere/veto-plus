@@ -1,12 +1,11 @@
-// Onglet Cas : première question du parcours (l'animal), puis reprise d'un cas en cours ou récent.
-import { useEffect, useState } from 'preact/hooks';
+// Onglet Cas : première question du parcours (l'animal), et reprise d'un cas en cours (les cas enregistrés sont dans l'Historique).
+import { useState } from 'preact/hooks';
 import { SPECIES, speciesById, type SpeciesId } from '../data/species';
 import { Chevron } from '../components/ui';
 import { Icon } from '../components/Icon';
-import { draft, newCase, openCase } from '../state/case';
+import { draft, newCase } from '../state/case';
 import { motifById } from '../data/wizard';
 import { go } from '../lib/router';
-import { db, type CaseRecord } from '../db/db';
 
 const DOMESTIC: { id: SpeciesId; detail?: string }[] = [
   { id: 'chien' }, { id: 'chat' }, { id: 'bovin' }, { id: 'cheval' }, { id: 'ovin' }, { id: 'caprin' }, { id: 'porc' },
@@ -14,10 +13,8 @@ const DOMESTIC: { id: SpeciesId; detail?: string }[] = [
 const WILD = SPECIES.filter((s) => s.group === 'faune');
 
 export function Home() {
-  const [recent, setRecent] = useState<CaseRecord[]>([]);
   const [wild, setWild] = useState(false);
   const [picked, setPicked] = useState<SpeciesId | null>(null);
-  useEffect(() => { db.cases.orderBy('updatedAt').reverse().limit(3).toArray().then(setRecent).catch(() => {}); }, []);
   // Un choix est visible un court instant avant de passer à la question suivante
   const start = (id: SpeciesId) => { setPicked(id); setTimeout(() => { newCase(id); go('/cas'); }, 160); };
   const current = draft.value && !draft.value.id && draft.value.motif ? draft.value : null;
@@ -70,23 +67,6 @@ export function Home() {
           </>
         )}
 
-        {recent.length > 0 && (
-          <>
-            <div class="section-title">Derniers cas</div>
-            <div class="list">
-              {recent.map((c) => (
-                <button key={c.id} class="list-item" onClick={() => { openCase(c); go('/resultat'); }}>
-                  <span class="grow">
-                    <b>{c.ref || speciesById(c.species).label}</b>
-                    <div class="sub">{c.summary?.top ?? 'Pas d’hypothèse'} · {new Date(c.updatedAt).toLocaleDateString('fr-FR')}</div>
-                  </span>
-                  {!!c.summary?.critical && <span class="tag crit">{c.summary.critical} alerte{c.summary.critical > 1 ? 's' : ''}</span>}
-                  <Chevron />
-                </button>
-              ))}
-            </div>
-          </>
-        )}
       </main>
     </>
   );
